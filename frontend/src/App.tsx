@@ -6,8 +6,6 @@ import AuthRedirect from '@/components/AuthRedirect';
 import LoginPage from '@/pages/LoginPage';
 import SignupPage from '@/pages/SignupPage';
 import DashboardPage from '@/pages/DashboardPage';
-import './App.css';
-
 function App() {
   console.log('App component loaded with React Router');
   

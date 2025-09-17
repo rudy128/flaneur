@@ -38,24 +38,24 @@ services:
         - action: rebuild
           path: ./backend
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    develop:
-      watch:
-        - action: sync
-          path: ./frontend/src
-          target: /app/src
-        - action: rebuild
-          path: ./frontend/package.json
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   develop:
+  #     watch:
+  #       - action: sync
+  #         path: ./frontend/src
+  #         target: /app/src
+  #       - action: rebuild
+  #         path: ./frontend/package.json
 
 volumes:
   postgres_data:
