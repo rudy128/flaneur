@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ripper
+      POSTGRES_USER: ripper
+      POSTGRES_PASSWORD: ripper123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   redis:
     image: redis:7-alpine
     ports:
@@ -16,9 +27,12 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - postgres
       - redis
     environment:
+      - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
       - REDIS_URL=redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
     develop:
       watch:
         - action: rebuild
@@ -33,6 +47,7 @@ services:
     depends_on:
       - backend
     volumes:
+      - ./frontend:/app
       - /app/node_modules
     develop:
       watch:
@@ -43,4 +58,5 @@ services:
           path: ./frontend/package.json
 
 volumes:
+  postgres_data:
   redis_data:
