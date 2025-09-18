@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ripper
       POSTGRES_PASSWORD: ripper123
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -20,23 +20,23 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-      - redis
-    environment:
-      - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
-      - REDIS_URL=redis:6379
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
-    develop:
-      watch:
-        - action: rebuild
-          path: ./backend
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   environment:
+  #     - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
+  #     - REDIS_URL=redis:6379
+  #     - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+  #   develop:
+  #     watch:
+  #       - action: rebuild
+  #         path: ./backend
 
   # frontend:
   #   build:

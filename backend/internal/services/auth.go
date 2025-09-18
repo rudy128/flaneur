@@ -21,9 +21,9 @@ type AuthService struct {
 }
 
 type SessionData struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	UserID   uuid.UUID `json:"user_id"`
+	Username string    `json:"username"`
+	Email    string    `json:"email"`
 }
 
 func NewAuthService(db *gorm.DB, redis *redis.Client, jwtSecret string) *AuthService {
