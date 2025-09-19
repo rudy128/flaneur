@@ -32,3 +32,8 @@ type GetTweetsRequest struct {
 type TwitterLoginRequest struct {
 	Username string `json:"username" binding:"required"`
 }
+
+type GetLikesRequest struct {
+	Username string `json:"username" binding:"required"`
+	URL      string `json:"url" binding:"required"`
+}

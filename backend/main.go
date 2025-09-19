@@ -31,7 +31,8 @@ func main() {
 	{
 		twitter.POST("/account", controllers.AddTwitterAccount)
 		twitter.POST("/login", controllers.TwitterLogin)
-		twitter.POST("/get_tweets", controllers.GetTweets)
+		twitter.POST("/post", controllers.GetTweets)
+		twitter.POST("/post/likes", controllers.GetLikes)
 	}
 
 	r.Run(":8080")

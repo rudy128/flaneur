@@ -193,3 +193,77 @@ func TwitterLogin(c *gin.Context) {
 	utils_twitter.StartLoginAsync(twitterAccount.Username, twitterAccount.Password, user.ID)
 	c.JSON(http.StatusAccepted, gin.H{"message": "Twitter login started in background"})
 }
+
+func GetLikes(c *gin.Context) {
+	// Check authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+
+	// Parse and validate token
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Extract email from token
+	claims := token.Claims.(jwt.MapClaims)
+	email := claims["email"].(string)
+
+	// Find user by email
+	var user models.User
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Bind request body
+	var req schemas.GetLikesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if the requested username belongs to the user
+	var twitterAccount models.TwitterAccount
+	if err := config.DB.Where("username = ? AND user_id = ?", req.Username, user.ID).First(&twitterAccount).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Twitter account not found or not owned by user"})
+		return
+	}
+
+	// Try to load existing tokens
+	err = utils_twitter.LoadTokensForUser(user.ID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No valid Twitter session found. Please login first using /twitter/login"})
+		return
+	}
+
+	// Validate if the loaded session is still working
+	if !utils_twitter.ValidateSession() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Twitter session expired. Please login again using /twitter/login"})
+		return
+	}
+
+	// Extract tweet ID from URL
+	tweetID := utils_twitter.ExtractTweetID(req.URL)
+	if tweetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tweet URL"})
+		return
+	}
+
+	// Get likers data
+	likers, err := utils_twitter.GetLikers(tweetID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch likers data"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"likers": likers, "count": len(likers)})
+}
