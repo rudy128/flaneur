@@ -19,3 +19,7 @@ type LoginResponse struct {
 type MessageResponse struct {
 	Message string `json:"message"`
 }
+type TwitterAccountRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}

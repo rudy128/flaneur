@@ -27,5 +27,10 @@ func main() {
 
 	r.GET("/dashboard", controllers.Dashboard)
 
+	twitter := r.Group("/twitter")
+	{
+		twitter.POST("/account", controllers.AddTwitterAccount)
+	}
+
 	r.Run(":8080")
 }
