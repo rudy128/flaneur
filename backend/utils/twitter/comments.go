@@ -31,7 +31,7 @@ func ExtractTweetID(tweetURL string) string {
 	return ""
 }
 
-func getAllTweetReplies(tweetID string) ([]*Tweet, error) {
+func GetAllTweetReplies(tweetID string) ([]*Tweet, error) {
 	if !isLoggedIn {
 		return nil, fmt.Errorf("not logged in")
 	}

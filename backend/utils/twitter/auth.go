@@ -110,7 +110,7 @@ func LoadTokensForUser(userID string) error {
 	}
 
 	jar, _ := cookiejar.New(nil)
-	globalClient = &http.Client{Jar: jar, Timeout: 10 * time.Second}
+	globalClient = &http.Client{Jar: jar, Timeout: 60 * time.Second}
 
 	if len(session.Cookies) > 0 {
 		u, _ := url.Parse("https://twitter.com")
@@ -210,7 +210,7 @@ func LoginAndSaveTokens(username, password, userID string) error {
 	fmt.Printf("Starting Twitter login for user: %s\n", username)
 
 	jar, _ := cookiejar.New(nil)
-	globalClient = &http.Client{Jar: jar, Timeout: 10 * time.Second}
+	globalClient = &http.Client{Jar: jar, Timeout: 60 * time.Second}
 
 	guestToken, err := getGuestToken(globalClient)
 	if err != nil {

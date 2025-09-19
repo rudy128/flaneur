@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func searchQuotedTweets(quotedTweetID string) ([]*Tweet, error) {
+func SearchQuotedTweets(quotedTweetID string) ([]*Tweet, error) {
 	if !isLoggedIn {
 		return nil, fmt.Errorf("not logged in")
 	}

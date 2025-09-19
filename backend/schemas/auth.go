@@ -37,3 +37,13 @@ type GetLikesRequest struct {
 	Username string `json:"username" binding:"required"`
 	URL      string `json:"url" binding:"required"`
 }
+
+type GetQuotesRequest struct {
+	Username string `json:"username" binding:"required"`
+	URL      string `json:"url" binding:"required"`
+}
+
+type GetCommentsRequest struct {
+	Username string `json:"username" binding:"required"`
+	URL      string `json:"url" binding:"required"`
+}
