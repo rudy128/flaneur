@@ -23,3 +23,12 @@ type TwitterAccountRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
+
+type GetTweetsRequest struct {
+	Username string `json:"username" binding:"required"`
+	URL      string `json:"url" binding:"required"`
+}
+
+type TwitterLoginRequest struct {
+	Username string `json:"username" binding:"required"`
+}

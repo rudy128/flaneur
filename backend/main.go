@@ -30,6 +30,8 @@ func main() {
 	twitter := r.Group("/twitter")
 	{
 		twitter.POST("/account", controllers.AddTwitterAccount)
+		twitter.POST("/login", controllers.TwitterLogin)
+		twitter.POST("/get_tweets", controllers.GetTweets)
 	}
 
 	r.Run(":8080")
