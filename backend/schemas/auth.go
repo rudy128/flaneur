@@ -47,3 +47,8 @@ type GetCommentsRequest struct {
 	Username string `json:"username" binding:"required"`
 	URL      string `json:"url" binding:"required"`
 }
+
+type GetRepostsRequest struct {
+	Username string `json:"username" binding:"required"`
+	URL      string `json:"url" binding:"required"`
+}

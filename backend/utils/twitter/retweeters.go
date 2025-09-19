@@ -6,14 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
 
-func getRetweeters(tweetID string) error {
+func GetRetweeters(tweetID string) ([]*User, error) {
 	if !isLoggedIn {
-		return fmt.Errorf("not logged in")
+		return nil, fmt.Errorf("not logged in")
 	}
 
 	allUsers := []*User{}
@@ -96,7 +95,7 @@ func getRetweeters(tweetID string) error {
 
 		resp, err := globalClient.Do(req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer resp.Body.Close()
 
@@ -112,7 +111,7 @@ func getRetweeters(tweetID string) error {
 
 		if resp.StatusCode != 200 {
 			fmt.Printf("Error: Status %s\n", resp.Status)
-			return fmt.Errorf("API error: %s", resp.Status)
+			return nil, fmt.Errorf("API error: %s", resp.Status)
 		}
 
 		pageUsers, nextCursor := parseRetweetersResponse(result)
@@ -142,20 +141,7 @@ func getRetweeters(tweetID string) error {
 		time.Sleep(2 * time.Second)
 	}
 
-	fmt.Printf("\n=== FOUND %d TOTAL RETWEETERS ===\n", len(allUsers))
-
-	usersJSON, err := json.MarshalIndent(allUsers, "", "  ")
-	if err != nil {
-		return fmt.Errorf("error marshaling users to JSON: %v", err)
-	}
-
-	err = os.WriteFile("retweeters.json", usersJSON, 0644)
-	if err != nil {
-		return fmt.Errorf("error writing users to file: %v", err)
-	}
-
-	fmt.Printf("Retweeters saved to retweeters.json\n")
-	return nil
+	return allUsers, nil
 }
 
 type User struct {

@@ -35,6 +35,7 @@ func main() {
 		twitter.POST("/post/likes", controllers.GetLikes)
 		twitter.POST("/post/quotes", controllers.GetQuotes)
 		twitter.POST("/post/comments", controllers.GetComments)
+		twitter.POST("/post/reposts", controllers.GetReposts)
 	}
 
 	r.Run(":8080")
