@@ -6,6 +6,7 @@ import (
 	"ripper-backend/config"
 	"ripper-backend/models"
 	"ripper-backend/schemas"
+	"ripper-backend/utils"
 	utils_twitter "ripper-backend/utils/twitter"
 	"strings"
 
@@ -105,6 +106,12 @@ func GetTweets(c *gin.Context) {
 		return
 	}
 
+	// Check rate limit
+	if err := utils.CheckTwitterRateLimit(twitterAccount.UserID); err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+
 	var req schemas.GetTweetsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -134,6 +141,9 @@ func GetTweets(c *gin.Context) {
 		return
 	}
 
+	// Deduct requests after successful API call
+	utils.DeductTwitterRequests(twitterAccount.UserID)
+
 	c.JSON(http.StatusOK, tweetWithMedia)
 }
 
@@ -141,6 +151,12 @@ func GetLikes(c *gin.Context) {
 	twitterAccount, err := authenticateTwitterToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check rate limit
+	if err := utils.CheckTwitterRateLimit(twitterAccount.UserID); err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -173,6 +189,9 @@ func GetLikes(c *gin.Context) {
 		return
 	}
 
+	// Deduct requests after successful API call
+	utils.DeductTwitterRequests(twitterAccount.UserID)
+
 	c.JSON(http.StatusOK, gin.H{"likers": likers, "count": len(likers)})
 }
 
@@ -180,6 +199,12 @@ func GetQuotes(c *gin.Context) {
 	twitterAccount, err := authenticateTwitterToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check rate limit
+	if err := utils.CheckTwitterRateLimit(twitterAccount.UserID); err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -212,6 +237,9 @@ func GetQuotes(c *gin.Context) {
 		return
 	}
 
+	// Deduct requests after successful API call
+	utils.DeductTwitterRequests(twitterAccount.UserID)
+
 	c.JSON(http.StatusOK, gin.H{"quotes": quotes, "count": len(quotes)})
 }
 
@@ -219,6 +247,12 @@ func GetComments(c *gin.Context) {
 	twitterAccount, err := authenticateTwitterToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check rate limit
+	if err := utils.CheckTwitterRateLimit(twitterAccount.UserID); err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -251,6 +285,9 @@ func GetComments(c *gin.Context) {
 		return
 	}
 
+	// Deduct requests after successful API call
+	utils.DeductTwitterRequests(twitterAccount.UserID)
+
 	c.JSON(http.StatusOK, gin.H{"comments": comments, "count": len(comments)})
 }
 
@@ -258,6 +295,12 @@ func GetReposts(c *gin.Context) {
 	twitterAccount, err := authenticateTwitterToken(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check rate limit
+	if err := utils.CheckTwitterRateLimit(twitterAccount.UserID); err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -289,6 +332,9 @@ func GetReposts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reposts data"})
 		return
 	}
+
+	// Deduct requests after successful API call
+	utils.DeductTwitterRequests(twitterAccount.UserID)
 
 	c.JSON(http.StatusOK, gin.H{"reposts": retweeters, "count": len(retweeters)})
 }
