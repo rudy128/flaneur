@@ -52,7 +52,7 @@ type SessionData struct {
 	LoginTime   time.Time              `json:"login_time"`
 }
 
-func SaveTokensForUser(userID string) error {
+func SaveTokensForAccount(userID, twitterAccountID string) error {
 	if globalClient == nil {
 		return fmt.Errorf("no session to save")
 	}
@@ -88,13 +88,13 @@ func SaveTokensForUser(userID string) error {
 	}
 
 	os.MkdirAll(tokensDir, 0755)
-	tokensFile := fmt.Sprintf("%s/tokens-%s.json", tokensDir, userID)
+	tokensFile := fmt.Sprintf("%s/tokens-%s-%s.json", tokensDir, userID, twitterAccountID)
 	data, _ := json.MarshalIndent(session, "", "  ")
 	return os.WriteFile(tokensFile, data, 0644)
 }
 
-func LoadTokensForUser(userID string) error {
-	tokensFile := fmt.Sprintf("%s/tokens-%s.json", tokensDir, userID)
+func LoadTokensForAccount(userID, twitterAccountID string) error {
+	tokensFile := fmt.Sprintf("%s/tokens-%s-%s.json", tokensDir, userID, twitterAccountID)
 	data, err := os.ReadFile(tokensFile)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func LoadTokensForUser(userID string) error {
 	globalGuestToken = session.GuestToken
 	isLoggedIn = true
 
-	fmt.Printf("Loaded session for user %s (saved %v ago)\n", userID, time.Since(session.LoginTime).Round(time.Minute))
+	fmt.Printf("Loaded session for account %s-%s (saved %v ago)\n", userID, twitterAccountID, time.Since(session.LoginTime).Round(time.Minute))
 	return nil
 }
 
@@ -205,7 +205,7 @@ func getFlowToken(client *http.Client, guestToken string, data map[string]interf
 	return info.FlowToken, nil
 }
 
-func LoginAndSaveTokens(username, password, userID string) error {
+func LoginAndSaveTokens(username, password, userID, twitterAccountID string) error {
 	fmt.Printf("⚠️  WARNING: Using username/password login. This may trigger account restrictions.\n")
 	fmt.Printf("Starting Twitter login for user: %s\n", username)
 
@@ -313,16 +313,16 @@ func LoginAndSaveTokens(username, password, userID string) error {
 	isLoggedIn = true
 	fmt.Println("Login successful!")
 
-	if err := SaveTokensForUser(userID); err != nil {
+	if err := SaveTokensForAccount(userID, twitterAccountID); err != nil {
 		fmt.Printf("Warning: Could not save tokens: %v\n", err)
 	} else {
-		fmt.Printf("Session saved for user %s\n", userID)
+		fmt.Printf("Session saved for account %s-%s\n", userID, twitterAccountID)
 	}
 
 	return nil
 }
 
-func StartLoginAsync(username, password, userID string) {
+func StartLoginAsync(username, password, userID, twitterAccountID string) {
 	loginMutex.Lock()
 	if loginInProgress[userID] {
 		loginMutex.Unlock()
@@ -338,7 +338,7 @@ func StartLoginAsync(username, password, userID string) {
 			loginMutex.Unlock()
 		}()
 
-		err := LoginAndSaveTokens(username, password, userID)
+		err := LoginAndSaveTokens(username, password, userID, twitterAccountID)
 		if err != nil {
 			fmt.Printf("Background login failed for user %s: %v\n", userID, err)
 		}
