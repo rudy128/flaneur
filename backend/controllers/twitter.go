@@ -292,3 +292,66 @@ func GetReposts(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"reposts": retweeters, "count": len(retweeters)})
 }
+
+func RegenerateTwitterToken(c *gin.Context) {
+	// Check main account authorization
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+
+	// Parse and validate main JWT token
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Extract email from token
+	claims := token.Claims.(jwt.MapClaims)
+	email := claims["email"].(string)
+
+	// Find user by email
+	var user models.User
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Bind request body
+	var req schemas.RegenerateTwitterTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verify Twitter account belongs to authenticated user
+	var twitterAccount models.TwitterAccount
+	if err := config.DB.Where("username = ? AND user_id = ?", req.Username, user.ID).First(&twitterAccount).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Twitter account not found or not owned by user"})
+		return
+	}
+
+	// Create new Twitter JWT token
+	twitterToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"username": req.Username,
+		"user_id":  user.ID,
+	})
+	twitterTokenString, _ := twitterToken.SignedString(jwtSecret)
+
+	// Update token in database
+	if err := config.DB.Model(&twitterAccount).Update("token", twitterTokenString).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":   twitterTokenString,
+		"message": "Twitter token regenerated successfully",
+	})
+}

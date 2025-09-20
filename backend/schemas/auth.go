@@ -47,3 +47,7 @@ type GetCommentsRequest struct {
 type GetRepostsRequest struct {
 	URL string `json:"url" binding:"required"`
 }
+
+type RegenerateTwitterTokenRequest struct {
+	Username string `json:"username" binding:"required"`
+}

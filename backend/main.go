@@ -43,6 +43,7 @@ func main() {
 	twitter := r.Group("/twitter")
 	{
 		twitter.POST("/account", controllers.AddTwitterAccount)
+		twitter.POST("/regenerate-token", controllers.RegenerateTwitterToken)
 		twitter.POST("/post", controllers.GetTweets)
 		twitter.POST("/post/likes", controllers.GetLikes)
 		twitter.POST("/post/quotes", controllers.GetQuotes)
