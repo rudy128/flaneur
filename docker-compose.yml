@@ -3,8 +3,6 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    ports:
-      - "5432:5432"
     environment:
       POSTGRES_DB: ripper
       POSTGRES_USER: ripper
@@ -18,19 +16,19 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
-  # backend:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8082:8080"
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #   environment:
-  #     - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
-  #     - REDIS_URL=redis:6379
-  #     - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8080"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
+      - REDIS_URL=redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
 
   # frontend:
   #   build:
