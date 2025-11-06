@@ -1,11 +1,14 @@
 package models
 
+import "time"
+
 type User struct {
-	ID          string `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	Name        string `json:"name" gorm:"not null"`
-	Email       string `json:"email" gorm:"unique;not null"`
-	Password    string `json:"-" gorm:"not null"`
-	TwitterReqs int    `json:"twitter_reqs" gorm:"default:100"`
+	ID          string    `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	Name        string    `json:"name" gorm:"not null"`
+	Email       string    `json:"email" gorm:"unique;not null"`
+	Password    string    `json:"-" gorm:"not null"`
+	TwitterReqs int       `json:"twitter_reqs" gorm:"default:100"`
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 type TwitterAccount struct {

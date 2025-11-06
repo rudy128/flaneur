@@ -1,0 +1,741 @@
+basePath: /
+definitions:
+  models.ApiCallLog:
+    properties:
+      created_at:
+        type: string
+      endpoint:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: string
+      ip_address:
+        type: string
+      method:
+        type: string
+      request_url:
+        type: string
+      response_time:
+        description: in milliseconds
+        type: integer
+      status_code:
+        type: integer
+      success:
+        type: boolean
+      twitter_username:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_agent:
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      twitter_reqs:
+        type: integer
+    type: object
+  schemas.ChangePasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        minLength: 6
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
+  schemas.GetCommentsRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  schemas.GetLikesRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  schemas.GetQuotesRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  schemas.GetRepostsRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  schemas.GetTweetsRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  schemas.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  schemas.LoginResponse:
+    properties:
+      email:
+        type: string
+      token:
+        type: string
+    type: object
+  schemas.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  schemas.SignupRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  schemas.TwitterAccountRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  schemas.TwitterLoginRequest:
+    properties:
+      username:
+        type: string
+    required:
+    - username
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@ripper-api.com
+    name: API Support
+  description: API for managing Twitter data extraction and user authentication
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Ripper Social API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/schemas.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User Login
+      tags:
+      - auth
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Signup credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/schemas.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User Signup
+      tags:
+      - auth
+  /change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change authenticated user's password (requires authentication)
+      parameters:
+      - description: Password change request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/schemas.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change Password
+      tags:
+      - auth
+  /dashboard:
+    get:
+      consumes:
+      - application/json
+      description: Get user dashboard information (requires authentication)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/schemas.MessageResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Dashboard
+      tags:
+      - dashboard
+  /logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve API call logs for the authenticated user
+      parameters:
+      - default: 50
+        description: Limit number of logs
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ApiCallLog'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get API Call Logs
+      tags:
+      - logs
+  /logs/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve API call statistics for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get API Call Statistics
+      tags:
+      - logs
+  /profile:
+    get:
+      consumes:
+      - application/json
+      description: Get authenticated user's profile information (requires authentication)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get User Profile
+      tags:
+      - auth
+  /twitter/account:
+    post:
+      consumes:
+      - application/json
+      description: Add a Twitter account for data extraction (requires JWT authentication)
+      parameters:
+      - description: Twitter credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.TwitterAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add Twitter Account
+      tags:
+      - twitter
+  /twitter/accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get all Twitter accounts connected to the authenticated user (requires
+        JWT authentication)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Twitter Accounts
+      tags:
+      - twitter
+  /twitter/post:
+    post:
+      consumes:
+      - application/json
+      description: Fetch tweet data including media (requires Twitter token authentication)
+      parameters:
+      - description: Tweet URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.GetTweetsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Tweet Data
+      tags:
+      - twitter
+  /twitter/post/comments:
+    post:
+      consumes:
+      - application/json
+      description: Fetch comments/replies for a tweet (requires Twitter token authentication)
+      parameters:
+      - description: Tweet URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.GetCommentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Tweet Comments
+      tags:
+      - twitter
+  /twitter/post/likes:
+    post:
+      consumes:
+      - application/json
+      description: Fetch users who liked a tweet (requires Twitter token authentication)
+      parameters:
+      - description: Tweet URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.GetLikesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Tweet Likes
+      tags:
+      - twitter
+  /twitter/post/quotes:
+    post:
+      consumes:
+      - application/json
+      description: Fetch quote tweets for a tweet (requires Twitter token authentication)
+      parameters:
+      - description: Tweet URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.GetQuotesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Tweet Quotes
+      tags:
+      - twitter
+  /twitter/post/reposts:
+    post:
+      consumes:
+      - application/json
+      description: Fetch users who reposted a tweet (requires Twitter token authentication)
+      parameters:
+      - description: Tweet URL
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.GetRepostsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Tweet Reposts
+      tags:
+      - twitter
+  /twitter/regenerate-token:
+    post:
+      consumes:
+      - application/json
+      description: Generate a new authentication token for a Twitter account (requires
+        JWT authentication)
+      parameters:
+      - description: Twitter username
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/schemas.TwitterLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Regenerate Twitter Token
+      tags:
+      - twitter
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

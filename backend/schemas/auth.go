@@ -19,6 +19,12 @@ type LoginResponse struct {
 type MessageResponse struct {
 	Message string `json:"message"`
 }
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=6"`
+}
+
 type TwitterAccountRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`

@@ -40,6 +40,6 @@ func ConnectDB() {
 		panic("Failed to connect to database")
 	}
 
-	db.AutoMigrate(&models.User{}, &models.TwitterAccount{})
+	db.AutoMigrate(&models.User{}, &models.TwitterAccount{}, &models.ApiCallLog{})
 	DB = db
 }
