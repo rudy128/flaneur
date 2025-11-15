@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery } from "@tanstack/react-query";
 import { whatsappApi } from "@/lib/api";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import {
   Select,
   SelectContent,
@@ -456,28 +459,35 @@ export default function SendMessages() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Send Messages</h1>
-          <p className="text-gray-600">
-            Import contacts and send bulk WhatsApp messages
-          </p>
-        </div>
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full">
+        <DashboardSidebar />
+        
+        <div className="flex-1 flex flex-col">
+          <DashboardHeader />
+          
+          <main className="flex-1 p-6 bg-gray-50">
+            <div className="max-w-7xl mx-auto space-y-6">
+              {/* Header */}
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold tracking-tight mb-2">Send Messages</h1>
+                <p className="text-muted-foreground">
+                  Import contacts and send bulk WhatsApp messages
+                </p>
+              </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column - Import & Contacts */}
-          <div className="space-y-6">
-            {/* Import Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="h-5 w-5" />
-                  Add Contacts
-                </CardTitle>
-                <CardDescription>
-                  Import from file or add manually
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Import & Contacts */}
+                <div className="space-y-6">
+                  {/* Import Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Upload className="h-5 w-5" />
+                        Add Contacts
+                      </CardTitle>
+                      <CardDescription>
+                        Import from file or add manually
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -893,7 +903,10 @@ export default function SendMessages() {
             </Card>
           </div>
         </div>
-      </div>
+              </div>
+            </main>
+          </div>
+        </div>
 
       {/* Result Alert Dialog */}
       <AlertDialog open={showResultDialog} onOpenChange={setShowResultDialog}>
@@ -952,6 +965,6 @@ export default function SendMessages() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SidebarProvider>
   );
 }

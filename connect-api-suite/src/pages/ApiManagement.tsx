@@ -152,6 +152,16 @@ const ApiManagement = () => {
   const generateWhatsAppQR = async () => {
     if (!token) return;
     
+    // Client-side limit: Only allow one WhatsApp account per user
+    if (hasWhatsAppAccount) {
+      toast({
+        title: "Limit Reached",
+        description: "You can only connect one WhatsApp account. Please remove the existing one first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       setIsConnecting(true);
       const response = await whatsappApi.generateQR(token);
@@ -261,6 +271,8 @@ const ApiManagement = () => {
   };
 
   const twitterAccounts = accountsData?.accounts || [];
+  const whatsappAccounts = whatsappAccountsData?.accounts || [];
+  const hasWhatsAppAccount = whatsappAccounts.length > 0;
 
   const handleEdit = (platform: string, account: ConnectedAccount) => {
     setEditAccount({ platform, account });
@@ -504,6 +516,11 @@ const ApiManagement = () => {
                             </Button>
                           </div>
                         ))}
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800">
+                            <span className="font-semibold">Note:</span> You can only connect one WhatsApp account per user. To connect a different account, please remove the existing one first.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </AccordionContent>
@@ -789,14 +806,22 @@ const ApiManagement = () => {
                       <span>Twitter</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="whatsapp">
+                  <SelectItem value="whatsapp" disabled={hasWhatsAppAccount}>
                     <div className="flex items-center gap-2">
                       <MessageCircle className="h-4 w-4" />
                       <span>WhatsApp</span>
+                      {hasWhatsAppAccount && (
+                        <span className="text-xs text-muted-foreground ml-1">(Limit reached)</span>
+                      )}
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
+              {hasWhatsAppAccount && (
+                <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
+                  You can only connect one WhatsApp account. Remove the existing one to connect a different account.
+                </p>
+              )}
             </div>
 
             {selectedPlatform === "twitter" && (
