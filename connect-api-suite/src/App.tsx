@@ -9,6 +9,7 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import ApiManagement from "./pages/ApiManagement";
 import UserProfile from "./pages/UserProfile";
+import SendMessages from "./pages/SendMessages";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/api-management" element={<ApiManagement />} />
+          <Route path="/send-messages" element={<SendMessages />} />
           <Route path="/user-profile" element={<UserProfile />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

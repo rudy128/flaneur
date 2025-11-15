@@ -16,7 +16,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { twitterAccountSchema, type TwitterAccountRequest } from "@/lib/schemas";
-import { twitterApi } from "@/lib/api";
+import { twitterApi, whatsappApi } from "@/lib/api";
+import { useEffect, useRef } from "react";
 
 interface ConnectedAccount {
   id: string;
@@ -84,6 +85,12 @@ const ApiManagement = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string>("twitter");
   const [isConnecting, setIsConnecting] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
+  
+  // WhatsApp QR Code state
+  const [whatsappQRCode, setWhatsappQRCode] = useState<string | null>(null);
+  const [whatsappSessionId, setWhatsappSessionId] = useState<string | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<string>("pending");
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const queryClient = useQueryClient();
   const token = localStorage.getItem("jwt_token");
@@ -92,6 +99,13 @@ const ApiManagement = () => {
   const { data: accountsData, isLoading: isLoadingAccounts } = useQuery({
     queryKey: ["twitter-accounts"],
     queryFn: () => twitterApi.getAccounts(token || ""),
+    enabled: !!token,
+  });
+
+  // Fetch connected WhatsApp accounts
+  const { data: whatsappAccountsData, isLoading: isLoadingWhatsAppAccounts } = useQuery({
+    queryKey: ["whatsapp-accounts"],
+    queryFn: () => whatsappApi.getAccounts(token || ""),
     enabled: !!token,
   });
 
@@ -132,6 +146,118 @@ const ApiManagement = () => {
     setCopiedKey(true);
     toast({ title: "API Key Copied!", description: "The API key has been copied to your clipboard." });
     setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  // WhatsApp QR Code generation
+  const generateWhatsAppQR = async () => {
+    if (!token) return;
+    
+    try {
+      setIsConnecting(true);
+      const response = await whatsappApi.generateQR(token);
+      setWhatsappQRCode(response.qr_code);
+      setWhatsappSessionId(response.session_id);
+      setWhatsappStatus(response.status);
+      
+      // Start polling for authentication status
+      startPolling(response.session_id);
+      
+      toast({
+        title: "QR Code Generated",
+        description: "Scan the QR code with WhatsApp to connect your account.",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to Generate QR Code",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+      setIsConnecting(false);
+    }
+  };
+
+  // Poll session status
+  const startPolling = (sessionId: string) => {
+    console.log("🔄 Starting polling for session:", sessionId);
+    
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingIntervalRef.current = setInterval(async () => {
+      if (!token) {
+        console.log("❌ No token available for polling");
+        return;
+      }
+
+      try {
+        console.log("📡 Polling session status for:", sessionId);
+        const status = await whatsappApi.checkSessionStatus(token, sessionId);
+        console.log("✅ Session status response:", status);
+        setWhatsappStatus(status.status);
+
+        if (status.status === "authenticated") {
+          // Success! Stop polling
+          console.log("🎉 Authentication successful!");
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+          }
+          
+          toast({
+            title: "WhatsApp Connected!",
+            description: `Account ${status.phone_number} has been connected successfully.`,
+          });
+          
+          setConnectModalOpen(false);
+          setWhatsappQRCode(null);
+          setWhatsappSessionId(null);
+          setIsConnecting(false);
+          queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+        } else if (status.status === "failed" || status.status === "expired") {
+          // Failed/Expired - stop polling
+          console.log("❌ Authentication failed/expired");
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+          }
+          
+          toast({
+            title: "Authentication Failed",
+            description: status.message,
+            variant: "destructive",
+          });
+          
+          setWhatsappQRCode(null);
+          setWhatsappSessionId(null);
+          setIsConnecting(false);
+        }
+      } catch (error) {
+        console.error("❌ Error polling session status:", error);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Handle platform selection
+  const handlePlatformChange = (platform: string) => {
+    setSelectedPlatform(platform);
+    // Reset WhatsApp state when switching platforms
+    if (platform !== "whatsapp") {
+      setWhatsappQRCode(null);
+      setWhatsappSessionId(null);
+      setWhatsappStatus("pending");
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    }
   };
 
   const twitterAccounts = accountsData?.accounts || [];
@@ -259,7 +385,7 @@ const ApiManagement = () => {
                 </AccordionItem>
 
                 {/* Other Platforms (No Data - Show Empty State) */}
-                {platforms.filter(p => p.name !== "Twitter").map((platform, idx) => {
+                {platforms.filter(p => p.name !== "Twitter" && p.name !== "WhatsApp").map((platform, idx) => {
                   const Icon = platform.icon;
                   return (
                     <AccordionItem key={platform.name} value={`platform-${idx}`}>
@@ -286,6 +412,102 @@ const ApiManagement = () => {
                     </AccordionItem>
                   );
                 })}
+
+                {/* WhatsApp Platform with Real Data */}
+                <AccordionItem value="platform-whatsapp">
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-green-50">
+                        <MessageCircle className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-semibold">WhatsApp</div>
+                        <div className="text-sm text-muted-foreground">
+                          {isLoadingWhatsAppAccounts ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Loading...
+                            </span>
+                          ) : (
+                            `${whatsappAccountsData?.accounts?.length || 0} connected account${whatsappAccountsData?.accounts?.length !== 1 ? 's' : ''}`
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {isLoadingWhatsAppAccounts ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      </div>
+                    ) : (whatsappAccountsData?.accounts?.length || 0) === 0 ? (
+                      <div className="text-center py-8">
+                        <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1">No WhatsApp Accounts</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Connect your WhatsApp account to get started</p>
+                        <Button 
+                          size="sm" 
+                          onClick={() => {
+                            setSelectedPlatform("whatsapp");
+                            setConnectModalOpen(true);
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Connect WhatsApp Account
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pt-4">
+                        {whatsappAccountsData?.accounts?.map((account) => (
+                          <div
+                            key={account.id}
+                            className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                            onClick={() => setViewAccount({ 
+                              platform: "WhatsApp", 
+                              account: { 
+                                id: account.id, 
+                                name: account.phone_number, 
+                                handle: account.phone_number, 
+                                followers: 0 
+                              } 
+                            })}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                                <MessageCircle className="h-5 w-5 text-green-600" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium">{account.phone_number}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {account.name || "WhatsApp Account"} • {account.status}
+                                </div>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewAccount({ 
+                                  platform: "WhatsApp", 
+                                  account: { 
+                                    id: account.id, 
+                                    name: account.phone_number, 
+                                    handle: account.phone_number, 
+                                    followers: 0 
+                                  } 
+                                });
+                              }}
+                            >
+                              <Key className="h-4 w-4 mr-2" />
+                              View Session
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
             </Card>
           </main>
@@ -312,6 +534,11 @@ const ApiManagement = () => {
             // Get the real Twitter account data if it's a Twitter account
             const twitterAccountData = viewAccount.platform === "Twitter" 
               ? twitterAccounts.find(acc => acc.id === viewAccount.account.id)
+              : null;
+            
+            // Get the real WhatsApp account data if it's a WhatsApp account
+            const whatsappAccountData = viewAccount.platform === "WhatsApp"
+              ? whatsappAccountsData?.accounts?.find(acc => acc.id === viewAccount.account.id)
               : null;
             
             return (
@@ -396,43 +623,91 @@ const ApiManagement = () => {
                                     </span>
                                     <code className="text-xs font-mono break-all">{endpoint.path}</code>
                                   </div>
-                                  <span className="text-xs text-muted-foreground">- {endpoint.desc}</span>
+                                  <span className="text-muted-foreground text-xs">{endpoint.desc}</span>
                                 </div>
                               ))}
                             </div>
                           </div>
                         </div>
-
-                        <div className="flex gap-2 pt-4 border-t">
-                          {/* <Button variant="outline" size="sm" asChild className="flex-1">
-                            <a href="http://localhost:8080/swagger/index.html" target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              View Full API Docs
-                            </a>
-                          </Button> */}
-                          <Button onClick={() => setViewAccount(null)} className="flex-1">
-                            Close
-                          </Button>
-                        </div>
                       </>
-                    ) : (
+                    ) : whatsappAccountData ? (
                       <>
-                        <div className="border-t pt-4 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`h-4 w-4 ${platform.color}`} />
-                            <span className="text-sm font-medium">{viewAccount.platform}</span>
+                        <div className="border-t pt-4 space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Session ID</Label>
+                            <div className="mt-2 flex gap-2">
+                              <Input
+                                value={whatsappAccountData.session_id}
+                                readOnly
+                                className="font-mono text-xs flex-1"
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCopyKey(whatsappAccountData.session_id)}
+                                className="shrink-0"
+                              >
+                                {copiedKey ? (
+                                  <Check className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Phone Number: {whatsappAccountData.phone_number}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Status: <span className="text-green-600 font-medium">{whatsappAccountData.status}</span>
+                            </p>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">Followers</span>
-                            <span className="text-sm font-semibold">{viewAccount.account.followers.toLocaleString()}</span>
+
+                          <div className="border-t pt-4">
+                            <h4 className="text-sm font-semibold mb-3">Example Usage</h4>
+                            <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                              <pre className="text-xs text-gray-100 whitespace-pre-wrap break-all">
+                                <code>{`curl -X POST http://localhost:8080/whatsapp/send-message \\
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "session_id": "${whatsappAccountData.session_id}",
+    "phone": "1234567890@s.whatsapp.net",
+    "message": "Hello from API!",
+    "reply": false
+  }'`}</code>
+                              </pre>
+                            </div>
+                          </div>
+
+                          <div className="border-t pt-4">
+                            <h4 className="text-sm font-semibold mb-3">Available Endpoints</h4>
+                            <div className="space-y-2">
+                              {[
+                                { method: "POST", path: "/whatsapp/send-message", desc: "Send WhatsApp message" },
+                                { method: "GET", path: "/whatsapp/", desc: "Get connected WhatsApp accounts" },
+                                { method: "GET", path: "/whatsapp/session-status/:id", desc: "Check session status" },
+                              ].map((endpoint, i) => (
+                                <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 text-xs font-semibold text-green-700 bg-green-100 rounded shrink-0">
+                                      {endpoint.method}
+                                    </span>
+                                    <code className="text-xs font-mono break-all">{endpoint.path}</code>
+                                  </div>
+                                  <span className="text-muted-foreground text-xs">{endpoint.desc}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                        
-                        <Button onClick={() => setViewAccount(null)} className="w-full">
-                          Close
-                        </Button>
                       </>
-                    )}
+                    ) : null}
+
+                    <div className="flex gap-2 pt-4 border-t">
+                      <Button onClick={() => setViewAccount(null)} className="flex-1">
+                        Close
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </>
@@ -503,7 +778,7 @@ const ApiManagement = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="platform">Platform</Label>
-              <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+              <Select value={selectedPlatform} onValueChange={handlePlatformChange}>
                 <SelectTrigger id="platform">
                   <SelectValue placeholder="Select a platform" />
                 </SelectTrigger>
@@ -512,6 +787,12 @@ const ApiManagement = () => {
                     <div className="flex items-center gap-2">
                       <Twitter className="h-4 w-4" />
                       <span>Twitter</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="whatsapp">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>WhatsApp</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -549,6 +830,62 @@ const ApiManagement = () => {
               </>
             )}
 
+            {selectedPlatform === "whatsapp" && (
+              <div className="space-y-4">
+                {!whatsappQRCode ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Click the button below to generate a QR code for WhatsApp login
+                    </p>
+                    <Button 
+                      type="button"
+                      onClick={generateWhatsAppQR}
+                      disabled={isConnecting}
+                      className="w-full"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating QR Code...
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle className="mr-2 h-4 w-4" />
+                          Generate QR Code
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-white p-4 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(whatsappQRCode)}`}
+                        alt="WhatsApp QR Code"
+                        className="w-48 h-48"
+                      />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="text-sm font-medium">
+                        {whatsappStatus === "pending" && "Scan QR code with WhatsApp"}
+                        {whatsappStatus === "authenticated" && "✓ Authenticated Successfully!"}
+                        {whatsappStatus === "failed" && "✗ Authentication Failed"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Open WhatsApp on your phone → Settings → Linked Devices → Link a Device
+                      </p>
+                      {whatsappStatus === "pending" && (
+                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Waiting for scan...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"
@@ -556,21 +893,29 @@ const ApiManagement = () => {
                 onClick={() => {
                   setConnectModalOpen(false);
                   resetForm();
+                  setWhatsappQRCode(null);
+                  setWhatsappSessionId(null);
+                  setWhatsappStatus("pending");
+                  if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current);
+                  }
                 }}
                 disabled={isConnecting}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isConnecting}>
-                {isConnecting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  "Connect Account"
-                )}
-              </Button>
+              {selectedPlatform === "twitter" && (
+                <Button type="submit" disabled={isConnecting}>
+                  {isConnecting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    "Connect Account"
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>

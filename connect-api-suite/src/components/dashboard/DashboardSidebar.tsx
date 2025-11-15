@@ -1,4 +1,4 @@
-import { LayoutDashboard, Code2, User } from "lucide-react";
+import { LayoutDashboard, Code2, User, Send } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +14,7 @@ import {
 const menuItems = [
   { title: "Dashboard", icon: LayoutDashboard, url: "/dashboard" },
   { title: "APIs", icon: Code2, url: "/api-management" },
+  { title: "Send Messages", icon: Send, url: "/send-messages" },
   { title: "User Profile", icon: User, url: "/user-profile" },
 ];
 

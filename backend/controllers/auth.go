@@ -168,14 +168,19 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
-	var accountCount int64
-	config.DB.Model(&models.TwitterAccount{}).Where("user_id = ?", user.ID).Count(&accountCount)
+	var twitterAccountCount int64
+	config.DB.Model(&models.TwitterAccount{}).Where("user_id = ?", user.ID).Count(&twitterAccountCount)
+
+	var whatsappAccountCount int64
+	config.DB.Model(&models.WhatsAppAccount{}).Where("user_id = ?", user.ID).Count(&whatsappAccountCount)
 
 	c.JSON(http.StatusOK, gin.H{
-		"email":             user.Email,
-		"name":              user.Name,
-		"created_at":        user.CreatedAt,
-		"accounts_connected": accountCount,
+		"email":                   user.Email,
+		"name":                    user.Name,
+		"created_at":              user.CreatedAt,
+		"accounts_connected":      twitterAccountCount + whatsappAccountCount,
+		"twitter_accounts_count":  twitterAccountCount,
+		"whatsapp_accounts_count": whatsappAccountCount,
 	})
 }
 

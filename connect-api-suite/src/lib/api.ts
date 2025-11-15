@@ -8,7 +8,7 @@ import type {
   ApiStats
 } from "./schemas";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8082";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 /**
  * Custom error class for API errors
@@ -268,6 +268,91 @@ export const logsApi = {
       headers: {
         Authorization: `Bearer ${jwtToken}`,
       },
+    });
+  },
+};
+
+/**
+ * WhatsApp API
+ */
+export const whatsappApi = {
+  /**
+   * Generate QR code for WhatsApp login
+   */
+  generateQR: async (jwtToken: string): Promise<{
+    session_id: string;
+    qr_code: string;
+    status: string;
+    message: string;
+  }> => {
+    return fetchApi("/whatsapp/generate-qr", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
+
+  /**
+   * Check WhatsApp session status
+   */
+  checkSessionStatus: async (jwtToken: string, sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    phone_number?: string;
+    name?: string;
+    message: string;
+  }> => {
+    return fetchApi(`/whatsapp/session-status/${sessionId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
+
+  /**
+   * Get connected WhatsApp accounts
+   */
+  getAccounts: async (jwtToken: string): Promise<{
+    accounts: Array<{
+      id: string;
+      phone_number: string;
+      name?: string;
+      session_id: string;
+      status: string;
+      created_at: string;
+    }>;
+    count: number;
+  }> => {
+    return fetchApi("/whatsapp/", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
+
+  /**
+   * Send WhatsApp message
+   */
+  sendMessage: async (
+    jwtToken: string,
+    sessionId: string,
+    phone: string,
+    message: string,
+    reply: boolean = false
+  ): Promise<{
+    success: boolean;
+    message: string;
+    error?: string;
+  }> => {
+    return fetchApi("/whatsapp/send-message", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+      body: JSON.stringify({ session_id: sessionId, phone, message, reply }),
     });
   },
 };

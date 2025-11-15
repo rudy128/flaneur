@@ -19,3 +19,15 @@ type TwitterAccount struct {
 	UserID   string `json:"user_id" gorm:"type:uuid;not null"`
 	User     User   `json:"user" gorm:"foreignKey:UserID"`
 }
+
+type WhatsAppAccount struct {
+	ID          string    `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	PhoneNumber string    `json:"phone_number" gorm:"not null"`
+	Name        string    `json:"name"`
+	SessionID   string    `json:"session_id" gorm:"not null;unique"`
+	Status      string    `json:"status" gorm:"default:'active'"` // active, disconnected
+	UserID      string    `json:"user_id" gorm:"type:uuid;not null"`
+	User        User      `json:"user" gorm:"foreignKey:UserID"`
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}

@@ -42,9 +42,11 @@ func main() {
 
 	// Enable CORS for all origins
 	r.Use(cors.New(cors.Config{
-		AllowAllOrigins: true,
-		AllowMethods:    []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:    []string{"*"},
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"Content-Length", "Authorization"},
+		AllowCredentials: false, // Cannot use credentials with AllowAllOrigins
 	}))
 
 	r.GET("/", func(c *gin.Context) {
@@ -77,6 +79,14 @@ func main() {
 		twitter.POST("/post/quotes", controllers.GetQuotes)
 		twitter.POST("/post/comments", controllers.GetComments)
 		twitter.POST("/post/reposts", controllers.GetReposts)
+	}
+
+	whatsapp := r.Group("/whatsapp")
+	{
+		whatsapp.POST("/generate-qr", controllers.GenerateWhatsAppQR)
+		whatsapp.GET("/session-status/:sessionId", controllers.CheckWhatsAppSession)
+		whatsapp.GET("/", controllers.GetWhatsAppAccounts)
+		whatsapp.POST("/send-message", controllers.SendWhatsAppMessage)
 	}
 
 	logs := r.Group("/logs")
