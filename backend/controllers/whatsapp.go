@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -16,7 +17,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const whatsappMicroserviceURL = "http://localhost:8083"
+func getWhatsAppMicroserviceURL() string {
+	if url := os.Getenv("WHATSAPP_MICROSERVICE_URL"); url != "" {
+		return url
+	}
+	return "http://localhost:8083"
+}
+
+var whatsappMicroserviceURL = getWhatsAppMicroserviceURL()
 
 // Helper function to extract user ID from JWT token
 func getUserIDFromToken(tokenString string) (string, error) {

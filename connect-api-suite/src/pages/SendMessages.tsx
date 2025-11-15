@@ -5,6 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery } from "@tanstack/react-query";
 import { whatsappApi } from "@/lib/api";
@@ -60,6 +62,11 @@ export default function SendMessages() {
   const [manualName, setManualName] = useState("");
   const [countryCode, setCountryCode] = useState("+91"); // Default to India
   const [inputMode, setInputMode] = useState<"file" | "manual">("file");
+  
+  // Scheduling state - Random by default
+  const [enableScheduling, setEnableScheduling] = useState(false);
+  const [randomDelayMin, setRandomDelayMin] = useState(10); // Default 10 seconds
+  const [randomDelayMax, setRandomDelayMax] = useState(60); // Default 60 seconds
   
   // Alert Dialog state
   const [showResultDialog, setShowResultDialog] = useState(false);
@@ -377,12 +384,10 @@ export default function SendMessages() {
     setSending(true);
     
     try {
-      let successCount = 0;
-      let failCount = 0;
-
-      // Send messages to each contact
-      for (const contact of contacts) {
-        try {
+      // If scheduling is enabled, use the bulk send API
+      if (enableScheduling) {
+        // Generate random delays for each message
+        const messagesWithDelays = contacts.map((contact, index) => {
           const phone = contact.phone.includes("@") ? contact.phone : `${contact.phone}@s.whatsapp.net`;
           
           // Use individual message if available, otherwise use the common message
@@ -396,48 +401,117 @@ export default function SendMessages() {
             messageToSend = messageToSend.replace(/\{name\}/gi, contactName);
           }
           
-          if (!messageToSend.trim()) {
-            console.warn(`Skipping ${contact.phone} - no message`);
-            failCount++;
-            continue;
-          }
+          // Generate random delay between min and max (in seconds)
+          const randomDelay = Math.floor(Math.random() * (randomDelayMax - randomDelayMin + 1)) + randomDelayMin;
           
-          await whatsappApi.sendMessage(
-            token,
-            selectedSession,
-            phone,
-            messageToSend,
-            false
-          );
-          successCount++;
-          
-          // Add small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error) {
-          console.error(`Failed to send to ${contact.phone}:`, error);
-          failCount++;
+          return {
+            recipient: phone,
+            message: messageToSend,
+            delay_seconds: randomDelay
+          };
+        });
+
+        console.log('Sending to backend:', {
+          session_name: selectedSession,
+          messages: messagesWithDelays,
+          messageCount: messagesWithDelays.length
+        });
+
+        // Call the bulk send API with individual delays
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/whatsapp/send-bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            session_name: selectedSession,
+            messages: messagesWithDelays
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Backend error:', errorData);
+          throw new Error(errorData.error || 'Failed to schedule messages');
         }
-      }
-      
-      // Show result dialog
-      if (successCount > 0 || failCount > 0) {
-        const totalMessages = successCount + failCount;
+
+        const result = await response.json();
+        
         showDialog(
-          failCount === 0 ? "success" : (successCount > 0 ? "success" : "error"),
-          failCount === 0 
-            ? `All ${successCount} messages sent successfully!`
-            : (successCount > 0 
-                ? `Messages sent with some failures`
-                : `Failed to send all messages`),
-          successCount,
-          failCount
+          "success",
+          `${contacts.length} messages scheduled successfully! Batch ID: ${result.batch_id}`,
+          contacts.length,
+          0
         );
-      }
-      
-      // Clear after successful send
-      if (successCount > 0) {
+        
+        // Clear after successful scheduling
         setMessage("");
         clearAll();
+      } else {
+        // Original immediate send logic
+        let successCount = 0;
+        let failCount = 0;
+
+        // Send messages to each contact
+        for (const contact of contacts) {
+          try {
+            const phone = contact.phone.includes("@") ? contact.phone : `${contact.phone}@s.whatsapp.net`;
+            
+            // Use individual message if available, otherwise use the common message
+            let messageToSend = useIndividualMessages && contact.message 
+              ? contact.message 
+              : message;
+            
+            // Replace {name} placeholder with contact's name
+            if (messageToSend.includes("{name}")) {
+              const contactName = contact.name || contact.phone;
+              messageToSend = messageToSend.replace(/\{name\}/gi, contactName);
+            }
+            
+            if (!messageToSend.trim()) {
+              console.warn(`Skipping ${contact.phone} - no message`);
+              failCount++;
+              continue;
+            }
+            
+            await whatsappApi.sendMessage(
+              token,
+              selectedSession,
+              phone,
+              messageToSend,
+              false
+            );
+            successCount++;
+            
+            // Add small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error(`Failed to send to ${contact.phone}:`, error);
+            failCount++;
+          }
+        }
+        
+        // Show result dialog
+        if (successCount > 0 || failCount > 0) {
+          const totalMessages = successCount + failCount;
+          showDialog(
+            failCount === 0 ? "success" : (successCount > 0 ? "success" : "error"),
+            failCount === 0 
+              ? `All ${successCount} messages sent successfully!`
+              : (successCount > 0 
+                  ? `Messages sent with some failures`
+                  : `Failed to send all messages`),
+            successCount,
+            failCount
+          );
+        }
+        
+        // Clear after successful send
+        if (successCount > 0) {
+          setMessage("");
+          clearAll();
+        }
       }
     } catch (error) {
       console.error("Error sending messages:", error);
@@ -883,6 +957,74 @@ export default function SendMessages() {
                     </div>
                   )}
 
+                  {/* Scheduling Controls */}
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Checkbox
+                        id="enable-scheduling"
+                        checked={enableScheduling}
+                        onCheckedChange={(checked) => setEnableScheduling(checked as boolean)}
+                      />
+                      <Label htmlFor="enable-scheduling" className="text-sm font-medium cursor-pointer">
+                        Enable Message Scheduling
+                      </Label>
+                    </div>
+                    
+                    {enableScheduling && (
+                      <div className="space-y-4 pl-6 border-l-2 border-green-200">
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <Label className="text-sm text-gray-700">
+                              Random Delay Range
+                            </Label>
+                            <span className="text-sm font-medium text-green-600">
+                              {randomDelayMin}s - {randomDelayMax}s
+                            </span>
+                          </div>
+                          <Slider
+                            min={5}
+                            max={120}
+                            step={5}
+                            value={[randomDelayMin, randomDelayMax]}
+                            onValueChange={(values) => {
+                              setRandomDelayMin(values[0]);
+                              setRandomDelayMax(values[1]);
+                            }}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-gray-500 mt-2">
+                            Each message will be sent after a random delay between {randomDelayMin} and {randomDelayMax} seconds
+                          </p>
+                        </div>
+                        
+                        {contacts.length > 0 && (
+                          <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                            <p className="text-xs font-medium text-green-800 mb-2">📊 Scheduling Preview:</p>
+                            <div className="space-y-1">
+                              <p className="text-xs text-green-700">
+                                • Message 1: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                              </p>
+                              <p className="text-xs text-green-700">
+                                • Message 2: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                              </p>
+                              <p className="text-xs text-green-700">
+                                • Message 3: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                              </p>
+                            </div>
+                            <div className="border-t border-green-300 mt-2 pt-2">
+                              <p className="text-xs font-medium text-green-800">
+                                ⏱️ Total estimated time: ~{Math.ceil(((randomDelayMin + randomDelayMax) / 2 * contacts.length) / 60)} minutes for {contacts.length} messages
+                              </p>
+                              <p className="text-xs text-green-600 mt-1">
+                                Each message gets a unique random delay. Backend will schedule them at exact times.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <Button
                     onClick={handleSendMessages}
                     disabled={(useIndividualMessages ? false : !message.trim()) || contacts.length === 0 || !selectedSession || sending}
@@ -890,7 +1032,7 @@ export default function SendMessages() {
                     size="lg"
                   >
                     <Send className="h-5 w-5 mr-2" />
-                    {sending ? "Sending..." : `Send to ${contacts.length} Contact${contacts.length !== 1 ? "s" : ""}`}
+                    {sending ? "Sending..." : enableScheduling ? `Schedule ${contacts.length} Message${contacts.length !== 1 ? "s" : ""}` : `Send to ${contacts.length} Contact${contacts.length !== 1 ? "s" : ""}`}
                   </Button>
 
                   {contacts.length === 0 && (
@@ -925,35 +1067,37 @@ export default function SendMessages() {
                 </>
               )}
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p className="text-base text-gray-700">{resultMessage}</p>
-              
-              {(successCount > 0 || failCount > 0) && (
-                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">Total Messages:</span>
-                    <span className="text-sm font-semibold text-gray-900">{successCount + failCount}</span>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-base text-gray-700">{resultMessage}</p>
+                
+                {(successCount > 0 || failCount > 0) && (
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-600">Total Messages:</span>
+                      <span className="text-sm font-semibold text-gray-900">{successCount + failCount}</span>
+                    </div>
+                    {successCount > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-green-700 flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Sent Successfully:
+                        </span>
+                        <span className="text-sm font-semibold text-green-700">{successCount}</span>
+                      </div>
+                    )}
+                    {failCount > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-red-700 flex items-center gap-1">
+                          <XCircle className="h-4 w-4" />
+                          Failed:
+                        </span>
+                        <span className="text-sm font-semibold text-red-700">{failCount}</span>
+                      </div>
+                    )}
                   </div>
-                  {successCount > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-green-700 flex items-center gap-1">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Sent Successfully:
-                      </span>
-                      <span className="text-sm font-semibold text-green-700">{successCount}</span>
-                    </div>
-                  )}
-                  {failCount > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-red-700 flex items-center gap-1">
-                        <XCircle className="h-4 w-4" />
-                        Failed:
-                      </span>
-                      <span className="text-sm font-semibold text-red-700">{failCount}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

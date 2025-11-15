@@ -1,8 +1,11 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
+    container_name: social-api-postgres
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -11,46 +14,73 @@ services:
       POSTGRES_PASSWORD: ripper123
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - social-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ripper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # redis:
-  #   image: redis:7-alpine
-  #   volumes:
-  #     - redis_data:/data
-  #   command: redis-server --appendonly yes
+  # WhatsApp Microservice
+  whatsapp-service:
+    build:
+      context: ./test
+      dockerfile: Dockerfile
+    container_name: social-api-whatsapp
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    volumes:
+      # Persist WhatsApp session data (SQLite databases)
+      - whatsapp_sessions:/app/data
+    networks:
+      - social-api-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8083/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # backend:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8082:8080"
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #   environment:
-  #     - DATABASE_URL=postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
-  #     - REDIS_URL=redis:6379
-  #     - JWT_SECRET=your-super-secret-jwt-key-change-in-production
-
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   develop:
-  #     watch:
-  #       - action: sync
-  #         path: ./frontend/src
-  #         target: /app/src
-  #       - action: rebuild
-  #         path: ./frontend/package.json
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: social-api-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://ripper:ripper123@postgres:5432/ripper?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-your-default-jwt-secret-change-me-in-production}
+      WHATSAPP_MICROSERVICE_URL: http://whatsapp-service:8083
+      PORT: 8080
+      GIN_MODE: release
+    depends_on:
+      postgres:
+        condition: service_healthy
+      whatsapp-service:
+        condition: service_started
+    networks:
+      - social-api-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
-  redis_data:
+    driver: local
+  whatsapp_sessions:
+    driver: local
+
+networks:
+  social-api-network:
+    driver: bridge

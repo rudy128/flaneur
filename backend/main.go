@@ -1,10 +1,16 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"ripper-backend/config"
 	"ripper-backend/controllers"
 	_ "ripper-backend/docs"
+	"ripper-backend/scheduler"
 	"ripper-backend/websocket"
 
 	"github.com/gin-contrib/cors"
@@ -34,6 +40,21 @@ import (
 
 func main() {
 	config.ConnectDB()
+
+	// Initialize message scheduler
+	log.Println("🚀 Initializing Message Scheduler...")
+	scheduler.InitScheduler()
+
+	// Graceful shutdown handler
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	
+	go func() {
+		<-sigChan
+		log.Println("🛑 Shutting down gracefully...")
+		scheduler.StopScheduler()
+		os.Exit(0)
+	}()
 
 	// Start WebSocket hub
 	go websocket.GlobalHub.Run()
@@ -87,6 +108,11 @@ func main() {
 		whatsapp.GET("/session-status/:sessionId", controllers.CheckWhatsAppSession)
 		whatsapp.GET("/", controllers.GetWhatsAppAccounts)
 		whatsapp.POST("/send-message", controllers.SendWhatsAppMessage)
+		whatsapp.POST("/send-bulk", controllers.SendBulkMessages)                  // New: Bulk send with scheduling
+		whatsapp.GET("/scheduled", controllers.GetScheduledMessages)               // New: Get scheduled messages
+		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)               // New: Get batch status
+		whatsapp.DELETE("/scheduled/:message_id", controllers.CancelScheduledMessage) // New: Cancel message
+		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)               // New: Cancel batch
 	}
 
 	logs := r.Group("/logs")
@@ -95,5 +121,6 @@ func main() {
 		logs.GET("/stats", controllers.GetAPIStats)
 	}
 
+	log.Println("🚀 Server starting on :8080")
 	r.Run(":8080")
 }

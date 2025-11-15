@@ -6,16 +6,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
 var (
-	// WhatsApp server running on localhost:8083
-	whatsappServerURL = "http://localhost:8083"
+	// WhatsApp server URL from environment or default
+	whatsappServerURL = getWhatsAppURL()
 	httpClient        = &http.Client{
 		Timeout: 30 * time.Second,
 	}
 )
+
+func getWhatsAppURL() string {
+	if url := os.Getenv("WHATSAPP_MICROSERVICE_URL"); url != "" {
+		return url
+	}
+	return "http://localhost:8083"
+}
 
 // QRCodeResponse represents the QR code data from WhatsApp server
 type QRCodeResponse struct {
