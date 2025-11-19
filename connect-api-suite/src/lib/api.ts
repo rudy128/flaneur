@@ -355,6 +355,93 @@ export const whatsappApi = {
       body: JSON.stringify({ session_id: sessionId, phone, message, reply }),
     });
   },
+
+  /**
+   * Delete WhatsApp account
+   */
+  deleteAccount: async (
+    jwtToken: string,
+    accountId: string
+  ): Promise<{
+    message: string;
+    id: string;
+  }> => {
+    return fetchApi(`/whatsapp/account/${accountId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
+
+  /**
+   * Get message logs (history)
+   */
+  getMessageLogs: async (
+    jwtToken: string,
+    params?: {
+      status?: string;
+      batch_id?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<{
+    logs: Array<{
+      id: string;
+      user_id: string;
+      session_id: string;
+      recipient_phone: string;
+      recipient_name?: string;
+      message: string;
+      message_type: string;
+      status: string;
+      scheduled_at?: string;
+      sent_at?: string;
+      error_message?: string;
+      batch_id: string;
+      sequence_number: number;
+      delay_seconds: number;
+      created_at: string;
+      updated_at: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> => {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append("status", params.status);
+    if (params?.batch_id) queryParams.append("batch_id", params.batch_id);
+    if (params?.limit) queryParams.append("limit", params.limit.toString());
+    if (params?.offset) queryParams.append("offset", params.offset.toString());
+
+    const url = `/whatsapp/message-logs${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
+    return fetchApi(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
+
+  /**
+   * Get message log statistics
+   */
+  getMessageLogStats: async (
+    jwtToken: string
+  ): Promise<{
+    total: number;
+    pending: number;
+    sent: number;
+    failed: number;
+  }> => {
+    return fetchApi("/whatsapp/message-logs/stats", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+      },
+    });
+  },
 };
 
 export { API_BASE_URL };

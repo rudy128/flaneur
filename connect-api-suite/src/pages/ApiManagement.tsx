@@ -141,6 +141,26 @@ const ApiManagement = () => {
     connectAccountMutation.mutate(data);
   };
 
+  // Delete WhatsApp account mutation
+  const deleteWhatsAppAccountMutation = useMutation({
+    mutationFn: (accountId: string) => whatsappApi.deleteAccount(token || "", accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-accounts"] });
+      toast({
+        title: "Account Deleted",
+        description: "WhatsApp account has been removed successfully.",
+      });
+      setDeleteAccount(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete account. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCopyKey = (key: string) => {
     navigator.clipboard.writeText(key);
     setCopiedKey(true);
@@ -297,11 +317,19 @@ const ApiManagement = () => {
   };
 
   const handleDelete = () => {
-    toast({
-      title: "Account Deleted",
-      description: "Connected account has been removed",
-    });
-    setDeleteAccount(null);
+    if (!deleteAccount) return;
+
+    if (deleteAccount.platform === "WhatsApp") {
+      // Delete WhatsApp account
+      deleteWhatsAppAccountMutation.mutate(deleteAccount.account.id);
+    } else {
+      // For other platforms, just show toast (not implemented yet)
+      toast({
+        title: "Account Deleted",
+        description: "Connected account has been removed",
+      });
+      setDeleteAccount(null);
+    }
   };
 
   return (
@@ -473,18 +501,20 @@ const ApiManagement = () => {
                         {whatsappAccountsData?.accounts?.map((account) => (
                           <div
                             key={account.id}
-                            className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-                            onClick={() => setViewAccount({ 
-                              platform: "WhatsApp", 
-                              account: { 
-                                id: account.id, 
-                                name: account.phone_number, 
-                                handle: account.phone_number, 
-                                followers: 0 
-                              } 
-                            })}
+                            className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                           >
-                            <div className="flex items-center gap-3">
+                            <div 
+                              className="flex items-center gap-3 flex-1 cursor-pointer"
+                              onClick={() => setViewAccount({ 
+                                platform: "WhatsApp", 
+                                account: { 
+                                  id: account.id, 
+                                  name: account.phone_number, 
+                                  handle: account.phone_number, 
+                                  followers: 0 
+                                } 
+                              })}
+                            >
                               <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
                                 <MessageCircle className="h-5 w-5 text-green-600" />
                               </div>
@@ -495,25 +525,47 @@ const ApiManagement = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setViewAccount({ 
-                                  platform: "WhatsApp", 
-                                  account: { 
-                                    id: account.id, 
-                                    name: account.phone_number, 
-                                    handle: account.phone_number, 
-                                    followers: 0 
-                                  } 
-                                });
-                              }}
-                            >
-                              <Key className="h-4 w-4 mr-2" />
-                              View Session
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewAccount({ 
+                                    platform: "WhatsApp", 
+                                    account: { 
+                                      id: account.id, 
+                                      name: account.phone_number, 
+                                      handle: account.phone_number, 
+                                      followers: 0 
+                                    } 
+                                  });
+                                }}
+                              >
+                                <Key className="h-4 w-4 mr-2" />
+                                View Session
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteAccount({ 
+                                    platform: "WhatsApp", 
+                                    account: { 
+                                      id: account.id, 
+                                      name: account.phone_number, 
+                                      handle: account.phone_number, 
+                                      followers: 0 
+                                    } 
+                                  });
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </Button>
+                            </div>
                           </div>
                         ))}
                         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">

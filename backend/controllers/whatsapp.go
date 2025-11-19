@@ -29,7 +29,7 @@ var whatsappMicroserviceURL = getWhatsAppMicroserviceURL()
 // Helper function to extract user ID from JWT token
 func getUserIDFromToken(tokenString string) (string, error) {
 	fmt.Println("DEBUG: Parsing JWT token...")
-	
+
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -42,7 +42,7 @@ func getUserIDFromToken(tokenString string) (string, error) {
 		fmt.Println("DEBUG: JWT parse error:", err)
 		return "", fmt.Errorf("invalid token: %v", err)
 	}
-	
+
 	if !token.Valid {
 		fmt.Println("DEBUG: Token is not valid")
 		return "", fmt.Errorf("invalid token")
@@ -53,15 +53,15 @@ func getUserIDFromToken(tokenString string) (string, error) {
 		fmt.Println("DEBUG: Failed to parse claims")
 		return "", fmt.Errorf("invalid token claims")
 	}
-	
+
 	fmt.Println("DEBUG: Token claims:", claims)
-	
+
 	email, ok := claims["email"].(string)
 	if !ok {
 		fmt.Println("DEBUG: Email not found in claims")
 		return "", fmt.Errorf("email not found in token")
 	}
-	
+
 	fmt.Println("DEBUG: Email from token:", email)
 
 	// Get user ID from email
@@ -70,7 +70,7 @@ func getUserIDFromToken(tokenString string) (string, error) {
 		fmt.Println("DEBUG: User lookup error:", err)
 		return "", fmt.Errorf("user not found")
 	}
-	
+
 	fmt.Println("DEBUG: User found, ID:", user.ID)
 
 	return user.ID, nil
@@ -199,7 +199,7 @@ func GetWhatsAppAccounts(c *gin.Context) {
 	// Get user ID from JWT token
 	authHeader := c.GetHeader("Authorization")
 	fmt.Println("DEBUG: Authorization header:", authHeader)
-	
+
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 		fmt.Println("DEBUG: Missing or invalid authorization header")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid authorization header"})
@@ -212,17 +212,17 @@ func GetWhatsAppAccounts(c *gin.Context) {
 		tokenPreview = token[:20] + "..."
 	}
 	fmt.Println("DEBUG: Token extracted (length:", len(token), "):", tokenPreview)
-	
+
 	userID, err := getUserIDFromToken(token)
 	if err != nil {
 		fmt.Println("DEBUG: getUserIDFromToken error:", err)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid token",
+			"error":   "Invalid token",
 			"details": err.Error(), // Add details for debugging
 		})
 		return
 	}
-	
+
 	fmt.Println("DEBUG: User ID from token:", userID)
 
 	// Fetch WhatsApp accounts from database
@@ -232,7 +232,7 @@ func GetWhatsAppAccounts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch WhatsApp accounts"})
 		return
 	}
-	
+
 	fmt.Println("DEBUG: Found accounts:", len(accounts))
 
 	c.JSON(http.StatusOK, gin.H{
@@ -256,7 +256,7 @@ func SendWhatsAppMessage(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("DEBUG SendMessage: Received request - SessionID: %s, Phone: %s, Message: %s\n", 
+	fmt.Printf("DEBUG SendMessage: Received request - SessionID: %s, Phone: %s, Message: %s\n",
 		req.SessionID, req.Phone, req.Message)
 
 	// Forward to WhatsApp microservice with session_id
@@ -308,4 +308,51 @@ func SendWhatsAppMessage(c *gin.Context) {
 	}
 
 	c.JSON(resp.StatusCode, sendResponse)
+}
+
+// DeleteWhatsAppAccount deletes a WhatsApp account
+func DeleteWhatsAppAccount(c *gin.Context) {
+	accountID := c.Param("id")
+	
+	// Get user ID from JWT token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid authorization header"})
+		return
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	userID, err := getUserIDFromToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Find the account
+	var account models.WhatsAppAccount
+	result := config.DB.Where("id = ? AND user_id = ?", accountID, userID).First(&account)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
+		return
+	}
+
+	// Delete the account from database
+	if err := config.DB.Delete(&account).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to delete account",
+		})
+		return
+	}
+
+	// Optional: Try to disconnect session from WhatsApp microservice
+	// This is best effort - we don't fail if microservice is down
+	disconnectURL := fmt.Sprintf("%s/api/whatsapp/disconnect/%s", whatsappMicroserviceURL, account.SessionID)
+	req, _ := http.NewRequest("DELETE", disconnectURL, nil)
+	client := &http.Client{Timeout: 5 * time.Second}
+	client.Do(req) // Ignore errors - account is already deleted from DB
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "WhatsApp account deleted successfully",
+		"id":      accountID,
+	})
 }

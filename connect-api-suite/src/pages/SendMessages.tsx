@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Upload, Send, FileText, X, Download, Plus, UserPlus, CheckCircle2, XCircle } from "lucide-react";
+import { Upload, Send, FileText, X, Download, Plus, UserPlus, CheckCircle2, XCircle, Clock, RefreshCw, ChevronUp, ChevronDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,25 @@ interface Contact {
   message?: string; // Individual message for this contact
 }
 
+interface MessageLog {
+  id: string;
+  user_id: string;
+  session_id: string;
+  recipient_phone: string;
+  recipient_name?: string;
+  message: string;
+  message_type: string;
+  status: string;
+  scheduled_at?: string;
+  sent_at?: string;
+  error_message?: string;
+  batch_id?: string;
+  sequence_number?: number;
+  retry_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function SendMessages() {
   const [message, setMessage] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -74,6 +93,9 @@ export default function SendMessages() {
   const [resultMessage, setResultMessage] = useState("");
   const [successCount, setSuccessCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
+
+  // Message History state
+  const [showMessageHistory, setShowMessageHistory] = useState(false);
 
   // Country codes with flags
   const countryCodes = [
@@ -149,6 +171,22 @@ export default function SendMessages() {
     console.log("Loading:", loadingSessions);
     console.log("Error:", sessionsError);
   }, [whatsappAccountsData, whatsappSessions, selectedSession, loadingSessions, sessionsError]);
+
+  // Fetch message logs with auto-refresh
+  const { data: messageLogsData, refetch: refetchLogs } = useQuery({
+    queryKey: ["message-logs", selectedSession],
+    queryFn: () => whatsappApi.getMessageLogs(token || "", { limit: 50, offset: 0 }),
+    enabled: !!token && showMessageHistory,
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
+  });
+
+  // Fetch message log stats
+  const { data: messageStatsData } = useQuery({
+    queryKey: ["message-log-stats"],
+    queryFn: () => whatsappApi.getMessageLogStats(token || ""),
+    enabled: !!token && showMessageHistory,
+    refetchInterval: 10000,
+  });
 
   // Auto-select first session
   useEffect(() => {
@@ -401,20 +439,41 @@ export default function SendMessages() {
             messageToSend = messageToSend.replace(/\{name\}/gi, contactName);
           }
           
-          // Generate random delay between min and max (in seconds)
-          const randomDelay = Math.floor(Math.random() * (randomDelayMax - randomDelayMin + 1)) + randomDelayMin;
-          
           return {
             recipient: phone,
             message: messageToSend,
-            delay_seconds: randomDelay
+            randomDelay: Math.floor(Math.random() * (randomDelayMax - randomDelayMin + 1)) + randomDelayMin
+          };
+        });
+
+        // Calculate cumulative delays
+        // First message: delay = 0 (sent immediately)
+        // Second message: delay = 0 + random_delay_1
+        // Third message: delay = 0 + random_delay_1 + random_delay_2
+        // And so on...
+        let cumulativeDelay = 0;
+        const messagesWithCumulativeDelays = messagesWithDelays.map((msg, index) => {
+          let messageDelay = 0;
+          if (index === 0) {
+            // First message sent immediately
+            messageDelay = 0;
+          } else {
+            // Add this message's random delay to cumulative total
+            cumulativeDelay += msg.randomDelay;
+            messageDelay = cumulativeDelay;
+          }
+          
+          return {
+            recipient: msg.recipient,
+            message: msg.message,
+            delay_seconds: messageDelay
           };
         });
 
         console.log('Sending to backend:', {
           session_name: selectedSession,
-          messages: messagesWithDelays,
-          messageCount: messagesWithDelays.length
+          messages: messagesWithCumulativeDelays,
+          messageCount: messagesWithCumulativeDelays.length
         });
 
         // Call the bulk send API with individual delays
@@ -426,7 +485,7 @@ export default function SendMessages() {
           },
           body: JSON.stringify({
             session_name: selectedSession,
-            messages: messagesWithDelays
+            messages: messagesWithCumulativeDelays
           })
         });
 
@@ -993,27 +1052,30 @@ export default function SendMessages() {
                             className="w-full"
                           />
                           <p className="text-xs text-gray-500 mt-2">
-                            Each message will be sent after a random delay between {randomDelayMin} and {randomDelayMax} seconds
+                            Messages will be sent with cumulative delays. First message immediately, then each subsequent message after a random delay.
                           </p>
                         </div>
                         
                         {contacts.length > 0 && (
                           <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                            <p className="text-xs font-medium text-green-800 mb-2">📊 Scheduling Preview:</p>
+                            <p className="text-xs font-medium text-green-800 mb-2">📊 Scheduling Preview (Cumulative):</p>
                             <div className="space-y-1">
                               <p className="text-xs text-green-700">
-                                • Message 1: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                                • Message 1: Sent immediately (0s delay)
                               </p>
                               <p className="text-xs text-green-700">
-                                • Message 2: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                                • Message 2: Sent after {randomDelayMin}-{randomDelayMax}s from Message 1
                               </p>
                               <p className="text-xs text-green-700">
-                                • Message 3: Random delay ~{Math.floor((randomDelayMin + randomDelayMax) / 2)}s (between {randomDelayMin}-{randomDelayMax}s)
+                                • Message 3: Sent after {randomDelayMin}-{randomDelayMax}s from Message 2
+                              </p>
+                              <p className="text-xs text-green-700">
+                                • And so on... (delays accumulate)
                               </p>
                             </div>
                             <div className="border-t border-green-300 mt-2 pt-2">
                               <p className="text-xs font-medium text-green-800">
-                                ⏱️ Total estimated time: ~{Math.ceil(((randomDelayMin + randomDelayMax) / 2 * contacts.length) / 60)} minutes for {contacts.length} messages
+                                ⏱️ Total estimated time: ~{Math.ceil(((randomDelayMin + randomDelayMax) / 2 * (contacts.length - 1)) / 60)} minutes for {contacts.length} messages
                               </p>
                               <p className="text-xs text-green-600 mt-1">
                                 Each message gets a unique random delay. Backend will schedule them at exact times.
@@ -1045,6 +1107,157 @@ export default function SendMessages() {
             </Card>
           </div>
         </div>
+
+        {/* Message History Section */}
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5" />
+                Message History
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {messageStatsData && (
+                  <div className="flex items-center gap-3 mr-4 text-sm">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                      Pending: {messageStatsData.pending || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      Sent: {messageStatsData.sent || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                      Failed: {messageStatsData.failed || 0}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowMessageHistory(!showMessageHistory);
+                    if (!showMessageHistory) {
+                      refetchLogs();
+                    }
+                  }}
+                >
+                  {showMessageHistory ? (
+                    <>
+                      <ChevronUp className="h-4 w-4 mr-2" />
+                      Hide History
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4 mr-2" />
+                      Show History
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          
+          {showMessageHistory && (
+            <CardContent>
+              {messageLogsData?.logs && messageLogsData.logs.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b">
+                        <tr className="text-left">
+                          <th className="pb-3 font-medium text-gray-600">Time / Scheduled</th>
+                          <th className="pb-3 font-medium text-gray-600">Recipient</th>
+                          <th className="pb-3 font-medium text-gray-600">Status</th>
+                          <th className="pb-3 font-medium text-gray-600">Message</th>
+                          <th className="pb-3 font-medium text-gray-600">Type</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {messageLogsData.logs.map((log: MessageLog) => (
+                          <tr key={log.id} className="hover:bg-gray-50">
+                            <td className="py-3">
+                              {log.status === 'pending' && log.scheduled_at ? (
+                                <div className="text-sm">
+                                  <div className="text-gray-600 font-medium">
+                                    ⏰ {new Date(log.scheduled_at).toLocaleString()}
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    Scheduled
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-600">
+                                  {new Date(log.sent_at || log.created_at).toLocaleString()}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 font-medium">
+                              {log.recipient_phone?.replace('@s.whatsapp.net', '') || 'N/A'}
+                            </td>
+                            <td className="py-3">
+                              {log.status === 'pending' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  <Clock className="h-3 w-3" />
+                                  Pending
+                                </span>
+                              )}
+                              {log.status === 'sent' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Sent
+                                </span>
+                              )}
+                              {log.status === 'failed' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  <XCircle className="h-3 w-3" />
+                                  Failed
+                                </span>
+                              )}
+                              {log.status === 'sending' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                  Sending
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 max-w-md truncate text-gray-600">
+                              {log.message || 'N/A'}
+                            </td>
+                            <td className="py-3 text-gray-500 text-xs">
+                              {log.message_type || 'text'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <p className="text-sm text-gray-500">
+                      Showing {messageLogsData.logs.length} of {messageLogsData.total || messageLogsData.logs.length} messages
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetchLogs()}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <RotateCcw className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">No messages sent yet</p>
+                  <p className="text-sm mt-1">Your message history will appear here</p>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
               </div>
             </main>
           </div>

@@ -7,7 +7,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
+	"ripper-backend/config"
+	"ripper-backend/models"
 	"ripper-backend/scheduler"
 
 	"github.com/gin-gonic/gin"
@@ -81,11 +84,30 @@ func SendBulkMessages(c *gin.Context) {
 	successCount := 0
 	failCount := 0
 	results := []map[string]interface{}{}
+	batchID := fmt.Sprintf("batch_%d", time.Now().UnixNano())
 
-	for _, msg := range req.Messages {
+	for i, msg := range req.Messages {
+		// Create message log entry
+		messageLog := &models.MessageLog{
+			UserID:         userID,
+			SessionID:      req.SessionName,
+			RecipientPhone: msg.Recipient,
+			Message:        msg.Message,
+			MessageType:    "bulk",
+			Status:         "pending",
+			BatchID:        batchID,
+			SequenceNumber: i + 1,
+			DelaySeconds:   0,
+		}
+		
+		// Save log entry
+		if err := config.DB.Create(messageLog).Error; err != nil {
+			log.Printf("⚠️ Failed to create message log: %v", err)
+		}
+
 		// Send message
 		err := sendWhatsAppMessageDirect(req.SessionName, msg.Recipient, msg.Message)
-		
+
 		result := map[string]interface{}{
 			"recipient": msg.Recipient,
 			"success":   err == nil,
@@ -94,8 +116,27 @@ func SendBulkMessages(c *gin.Context) {
 		if err != nil {
 			failCount++
 			result["error"] = err.Error()
+			
+			// Update log status to failed
+			if messageLog.ID != "" {
+				now := time.Now()
+				config.DB.Model(messageLog).Updates(map[string]interface{}{
+					"status":        "failed",
+					"error_message": err.Error(),
+					"sent_at":       &now,
+				})
+			}
 		} else {
 			successCount++
+			
+			// Update log status to sent
+			if messageLog.ID != "" {
+				now := time.Now()
+				config.DB.Model(messageLog).Updates(map[string]interface{}{
+					"status":  "sent",
+					"sent_at": &now,
+				})
+			}
 		}
 
 		results = append(results, result)
@@ -134,7 +175,7 @@ func sendImmediateBulk(c *gin.Context, sessionID string, contacts []scheduler.Co
 
 		// Send message
 		err := sendWhatsAppMessageDirect(sessionID, phone, personalizedMsg)
-		
+
 		result := map[string]interface{}{
 			"phone":   contact.Phone,
 			"name":    contact.Name,
@@ -323,18 +364,18 @@ func CancelBatch(c *gin.Context) {
 func replaceNamePlaceholder(message, name string) string {
 	replacements := []string{"{name}", "{Name}", "{NAME}"}
 	result := message
-	
+
 	for _, placeholder := range replacements {
 		result = replaceAllOccurrences(result, placeholder, name)
 	}
-	
+
 	return result
 }
 
 func replaceAllOccurrences(s, old, new string) string {
 	result := ""
 	remaining := s
-	
+
 	for {
 		index := findIndex(remaining, old)
 		if index == -1 {
@@ -344,7 +385,7 @@ func replaceAllOccurrences(s, old, new string) string {
 		result += remaining[:index] + new
 		remaining = remaining[index+len(old):]
 	}
-	
+
 	return result
 }
 

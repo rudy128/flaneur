@@ -48,7 +48,7 @@ func main() {
 	// Graceful shutdown handler
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	
+
 	go func() {
 		<-sigChan
 		log.Println("🛑 Shutting down gracefully...")
@@ -107,12 +107,15 @@ func main() {
 		whatsapp.POST("/generate-qr", controllers.GenerateWhatsAppQR)
 		whatsapp.GET("/session-status/:sessionId", controllers.CheckWhatsAppSession)
 		whatsapp.GET("/", controllers.GetWhatsAppAccounts)
+		whatsapp.DELETE("/account/:id", controllers.DeleteWhatsAppAccount)               // New: Delete WhatsApp account
 		whatsapp.POST("/send-message", controllers.SendWhatsAppMessage)
-		whatsapp.POST("/send-bulk", controllers.SendBulkMessages)                  // New: Bulk send with scheduling
-		whatsapp.GET("/scheduled", controllers.GetScheduledMessages)               // New: Get scheduled messages
-		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)               // New: Get batch status
+		whatsapp.POST("/send-bulk", controllers.SendBulkMessages)                     // New: Bulk send with scheduling
+		whatsapp.GET("/scheduled", controllers.GetScheduledMessages)                  // New: Get scheduled messages
+		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)                  // New: Get batch status
 		whatsapp.DELETE("/scheduled/:message_id", controllers.CancelScheduledMessage) // New: Cancel message
-		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)               // New: Cancel batch
+		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)                  // New: Cancel batch
+		whatsapp.GET("/message-logs", controllers.GetMessageLogs)                     // New: Get message history
+		whatsapp.GET("/message-logs/stats", controllers.GetMessageLogStats)           // New: Get message stats
 	}
 
 	logs := r.Group("/logs")

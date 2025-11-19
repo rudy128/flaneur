@@ -648,13 +648,13 @@ func main() {
 
 	fmt.Println("\n✓ HTTP server started successfully on port 8083")
 	fmt.Println("✓ Ready to accept QR generation requests")
-	
+
 	// Load existing sessions from disk
 	fmt.Println("\n━━━ Loading Existing Sessions ━━━")
 	if err := loadExistingSessions(); err != nil {
 		fmt.Printf("Warning: Error loading sessions: %v\n", err)
 	}
-	
+
 	fmt.Println("\nPress Ctrl+C to stop the service\n")
 
 	// Optional: Initialize default client for backward compatibility
@@ -692,12 +692,12 @@ func main() {
 	<-c
 
 	fmt.Println("\n━━━ Shutting down ━━━")
-	
+
 	// Disconnect all sessions
 	sessionsMu.RLock()
 	sessionCount := len(sessions)
 	sessionsMu.RUnlock()
-	
+
 	if sessionCount > 0 {
 		fmt.Printf("Disconnecting %d session(s)...\n", sessionCount)
 		sessionsMu.Lock()
@@ -709,13 +709,13 @@ func main() {
 		}
 		sessionsMu.Unlock()
 	}
-	
+
 	// Disconnect default client
 	if client != nil {
 		fmt.Println("Disconnecting default client...")
 		client.Disconnect()
 	}
-	
+
 	fmt.Println("✓ All sessions disconnected")
 	fmt.Println("Goodbye!")
 }
