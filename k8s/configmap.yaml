@@ -13,7 +13,7 @@ data:
   BACKEND_PORT: "8080"
   GIN_MODE: "release"
   K8S_NAMESPACE: "social-api"
-  K8S_WHATSAPP_IMAGE: "rudy128/whatsapp-service:latest"
+  K8S_WHATSAPP_IMAGE: "rudy128/social-api-whatsapp-service:latest"
   K8S_SERVICE_ACCOUNT: "whatsapp-spawner"
 ---
 apiVersion: v1

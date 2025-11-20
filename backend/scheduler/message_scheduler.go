@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"ripper-backend/config"
@@ -236,6 +237,37 @@ func (s *MessageScheduler) sendToWhatsApp(msg *models.ScheduledMessage) error {
 	log.Printf("📡 WhatsApp service response: Status=%d, Body=%s", resp.StatusCode, string(body))
 
 	if resp.StatusCode != http.StatusOK {
+		// Check if it's an authentication failure (401 Unauthorized)
+		if resp.StatusCode == http.StatusUnauthorized {
+			// Parse response to check for authentication errors
+			var errorResponse map[string]interface{}
+			if err := json.Unmarshal(body, &errorResponse); err == nil {
+				if errorMsg, ok := errorResponse["error"].(string); ok {
+					// Check if error indicates session not authenticated
+					if strings.Contains(errorMsg, "not authenticated") || strings.Contains(errorMsg, "Logged out") {
+						log.Printf("⚠️ Session %s is not authenticated - pausing all pending messages", msg.SessionID)
+						
+						// Update WhatsApp account status to logged_out
+						s.db.Model(&models.WhatsAppAccount{}).
+							Where("session_id = ?", msg.SessionID).
+							Update("status", "logged_out")
+						
+						// Pause all pending scheduled messages for this session
+						result := s.db.Model(&models.ScheduledMessage{}).
+							Where("session_id = ? AND status = ?", msg.SessionID, "pending").
+							Updates(map[string]interface{}{
+								"status":        "paused",
+								"error_message": "WhatsApp session logged out - please reconnect",
+							})
+						
+						if result.RowsAffected > 0 {
+							log.Printf("⏸️ Paused %d scheduled messages for session %s due to authentication failure", result.RowsAffected, msg.SessionID)
+						}
+					}
+				}
+			}
+		}
+		
 		// Update log status to failed
 		if messageLog.ID != "" {
 			now := time.Now()

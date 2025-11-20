@@ -11,7 +11,7 @@ type ScheduledMessage struct {
 	RecipientName  string     `json:"recipient_name"`
 	Message        string     `json:"message" gorm:"type:text;not null"`
 	ScheduledAt    time.Time  `json:"scheduled_at" gorm:"not null;index"`
-	Status         string     `json:"status" gorm:"default:'pending';index"` // pending, sent, failed, cancelled
+	Status         string     `json:"status" gorm:"default:'pending';index"` // pending, sent, failed, cancelled, paused
 	SentAt         *time.Time `json:"sent_at"`
 	ErrorMessage   string     `json:"error_message"`
 	BatchID        string     `json:"batch_id" gorm:"index"` // Group messages from same bulk send

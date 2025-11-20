@@ -96,6 +96,10 @@ export default function SendMessages() {
 
   // Message History state
   const [showMessageHistory, setShowMessageHistory] = useState(false);
+  
+  // Error Details Dialog state
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [selectedMessageLog, setSelectedMessageLog] = useState<MessageLog | null>(null);
 
   // Country codes with flags
   const countryCodes = [
@@ -1132,6 +1136,12 @@ export default function SendMessages() {
                       <span className="w-2 h-2 rounded-full bg-green-500"></span>
                       Sent: {messageStatsData.sent || 0}
                     </span>
+                    {(messageStatsData.paused || 0) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                        Paused: {messageStatsData.paused || 0}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full bg-red-500"></span>
                       Failed: {messageStatsData.failed || 0}
@@ -1181,7 +1191,16 @@ export default function SendMessages() {
                       </thead>
                       <tbody className="divide-y">
                         {messageLogsData.logs.map((log: MessageLog) => (
-                          <tr key={log.id} className="hover:bg-gray-50">
+                          <tr 
+                            key={log.id} 
+                            className={`hover:bg-gray-50 ${(log.status === 'failed' || log.status === 'paused') ? 'cursor-pointer' : ''}`}
+                            onClick={() => {
+                              if (log.status === 'failed' || log.status === 'paused') {
+                                setSelectedMessageLog(log);
+                                setShowErrorDialog(true);
+                              }
+                            }}
+                          >
                             <td className="py-3">
                               {log.status === 'pending' && log.scheduled_at ? (
                                 <div className="text-sm">
@@ -1218,6 +1237,14 @@ export default function SendMessages() {
                                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                   <XCircle className="h-3 w-3" />
                                   Failed
+                                </span>
+                              )}
+                              {log.status === 'paused' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                                  </svg>
+                                  Paused
                                 </span>
                               )}
                               {log.status === 'sending' && (
@@ -1323,6 +1350,126 @@ export default function SendMessages() {
               className={resultType === "success" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
             >
               OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Error Details Dialog */}
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {selectedMessageLog?.status === 'paused' ? (
+                <>
+                  <svg className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                  </svg>
+                  <span>Message Paused</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-6 w-6 text-red-600" />
+                  <span>Message Failed</span>
+                </>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Recipient</span>
+                      <p className="text-sm font-medium text-gray-900 mt-1">
+                        {selectedMessageLog?.recipient_phone?.replace('@s.whatsapp.net', '') || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Status</span>
+                      <p className="text-sm font-medium text-gray-900 mt-1 capitalize">
+                        {selectedMessageLog?.status}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Session ID</span>
+                      <p className="text-sm font-mono text-gray-900 mt-1">
+                        {selectedMessageLog?.session_id || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-gray-500">Time</span>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {selectedMessageLog?.sent_at 
+                          ? new Date(selectedMessageLog.sent_at).toLocaleString()
+                          : new Date(selectedMessageLog?.created_at || '').toLocaleString()
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-xs font-medium text-gray-500">Message</span>
+                    <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">
+                      {selectedMessageLog?.message || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedMessageLog?.error_message && (
+                  <div className={`rounded-lg p-4 ${
+                    selectedMessageLog?.status === 'paused' 
+                      ? 'bg-orange-50 border border-orange-200' 
+                      : 'bg-red-50 border border-red-200'
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {selectedMessageLog?.status === 'paused' ? (
+                        <svg className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <h4 className={`text-sm font-semibold mb-1 ${
+                          selectedMessageLog?.status === 'paused' ? 'text-orange-900' : 'text-red-900'
+                        }`}>
+                          {selectedMessageLog?.status === 'paused' ? 'Reason for Pause:' : 'Error Details:'}
+                        </h4>
+                        <p className={`text-sm ${
+                          selectedMessageLog?.status === 'paused' ? 'text-orange-800' : 'text-red-800'
+                        }`}>
+                          {selectedMessageLog?.error_message}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedMessageLog?.status === 'paused' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <svg className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-blue-900 mb-1">What to do next:</h4>
+                        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                          <li>Go to API Management and delete the logged-out WhatsApp account</li>
+                          <li>Generate a new QR code and scan it with your phone</li>
+                          <li>Use the Resume API to transfer paused messages to the new session</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction 
+              className={selectedMessageLog?.status === 'paused' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}
+            >
+              Close
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -247,36 +247,57 @@ func CheckWhatsAppSession(c *gin.Context) {
 		return
 	}
 
-	// If authenticated, save to database
-	if status, ok := statusResponse["status"].(string); ok && status == "authenticated" {
+	// Update database based on session status
+	if status, ok := statusResponse["status"].(string); ok {
 		// Get user ID from JWT token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			userID, err := getUserIDFromToken(token)
 			if err == nil {
-				// Save WhatsApp account to database
-				phoneNumber, _ := statusResponse["phone_number"].(string)
-				name, _ := statusResponse["name"].(string)
+				if status == "authenticated" {
+					// Save WhatsApp account to database
+					phoneNumber, _ := statusResponse["phone_number"].(string)
+					name, _ := statusResponse["name"].(string)
 
-				whatsappAccount := models.WhatsAppAccount{
-					PhoneNumber: phoneNumber,
-					Name:        name,
-					SessionID:   sessionID,
-					Status:      "active",
-					UserID:      userID,
-				}
+					whatsappAccount := models.WhatsAppAccount{
+						PhoneNumber: phoneNumber,
+						Name:        name,
+						SessionID:   sessionID,
+						Status:      "active",
+						UserID:      userID,
+					}
 
-				// Check if account already exists
-				var existingAccount models.WhatsAppAccount
-				result := config.DB.Where("session_id = ?", sessionID).First(&existingAccount)
+					// Check if account already exists
+					var existingAccount models.WhatsAppAccount
+					result := config.DB.Where("session_id = ?", sessionID).First(&existingAccount)
 
-				if result.Error != nil {
-					// Create new account
-					config.DB.Create(&whatsappAccount)
-				} else {
-					// Update existing account
-					config.DB.Model(&existingAccount).Updates(whatsappAccount)
+					if result.Error != nil {
+						// Create new account
+						config.DB.Create(&whatsappAccount)
+					} else {
+						// Update existing account
+						config.DB.Model(&existingAccount).Updates(whatsappAccount)
+					}
+				} else if status == "failed" || status == "logged_out" {
+					// Update account status to logged_out in database
+					config.DB.Model(&models.WhatsAppAccount{}).
+						Where("session_id = ?", sessionID).
+						Update("status", "logged_out")
+					
+					// Pause all pending scheduled messages for this session
+					result := config.DB.Model(&models.ScheduledMessage{}).
+						Where("session_id = ? AND status = ?", sessionID, "pending").
+						Updates(map[string]interface{}{
+							"status":        "paused",
+							"error_message": "WhatsApp session logged out - please reconnect",
+						})
+					
+					if result.RowsAffected > 0 {
+						log.Printf("⏸️ Paused %d scheduled messages for session %s due to logout", result.RowsAffected, sessionID)
+					}
+					
+					log.Printf("⚠️ WhatsApp session %s logged out - user should delete and reconnect", sessionID)
 				}
 			}
 		}
@@ -438,6 +459,16 @@ func DeleteWhatsAppAccount(c *gin.Context) {
 		return
 	}
 
+	// Delete the Kubernetes pod, service, and PVC
+	if k8sManager != nil {
+		err := k8sManager.DeleteWhatsAppPod(account.SessionID)
+		if err != nil {
+			log.Printf("⚠️ Warning: Failed to delete K8s resources for session %s: %v", account.SessionID, err)
+		} else {
+			log.Printf("✅ Deleted K8s pod and resources for session %s", account.SessionID)
+		}
+	}
+
 	// Build service URL for this session's pod
 	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", account.SessionID, k8sManager.GetNamespace())
 
@@ -449,7 +480,7 @@ func DeleteWhatsAppAccount(c *gin.Context) {
 	client.Do(req) // Ignore errors - account is already deleted from DB
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "WhatsApp account deleted successfully",
+		"message": "WhatsApp account and pod deleted successfully",
 		"id":      accountID,
 	})
 }

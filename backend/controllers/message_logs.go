@@ -90,12 +90,14 @@ func GetMessageLogStats(c *gin.Context) {
 		Pending int64 `json:"pending"`
 		Sent    int64 `json:"sent"`
 		Failed  int64 `json:"failed"`
+		Paused  int64 `json:"paused"`
 	}
 
 	config.DB.Model(&models.MessageLog{}).Where("user_id = ?", userID).Count(&stats.Total)
 	config.DB.Model(&models.MessageLog{}).Where("user_id = ? AND status = ?", userID, "pending").Count(&stats.Pending)
 	config.DB.Model(&models.MessageLog{}).Where("user_id = ? AND status = ?", userID, "sent").Count(&stats.Sent)
 	config.DB.Model(&models.MessageLog{}).Where("user_id = ? AND status = ?", userID, "failed").Count(&stats.Failed)
+	config.DB.Model(&models.MessageLog{}).Where("user_id = ? AND status = ?", userID, "paused").Count(&stats.Paused)
 
 	c.JSON(http.StatusOK, stats)
 }

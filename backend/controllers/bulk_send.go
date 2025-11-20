@@ -361,6 +361,81 @@ func CancelBatch(c *gin.Context) {
 	})
 }
 
+// ResumePausedMessages resumes paused messages and optionally changes the session
+func ResumePausedMessages(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+		return
+	}
+
+	tokenString := authHeader[len("Bearer "):]
+	userID, err := getUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	var req struct {
+		OldSessionID string `json:"old_session_id"`
+		NewSessionID string `json:"new_session_id"` // Optional: if provided, changes session
+		BatchID      string `json:"batch_id"`       // Optional: resume specific batch
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.OldSessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "old_session_id required"})
+		return
+	}
+
+	// Build query
+	query := config.DB.Model(&models.ScheduledMessage{}).
+		Where("user_id = ? AND session_id = ? AND status = ?", userID, req.OldSessionID, "paused")
+
+	if req.BatchID != "" {
+		query = query.Where("batch_id = ?", req.BatchID)
+	}
+
+	// Prepare updates
+	updates := map[string]interface{}{
+		"status":        "pending",
+		"error_message": "",
+	}
+
+	// Change session if new session provided
+	if req.NewSessionID != "" && req.NewSessionID != req.OldSessionID {
+		// Verify new session exists and is active
+		var newAccount models.WhatsAppAccount
+		if err := config.DB.Where("session_id = ? AND user_id = ? AND status = ?", req.NewSessionID, userID, "active").First(&newAccount).Error; err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "New WhatsApp session not found or not active"})
+			return
+		}
+		updates["session_id"] = req.NewSessionID
+	}
+
+	// Resume messages
+	result := query.Updates(updates)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		return
+	}
+
+	message := fmt.Sprintf("Resumed %d paused messages", result.RowsAffected)
+	if req.NewSessionID != "" && req.NewSessionID != req.OldSessionID {
+		message += fmt.Sprintf(" and changed session to %s", req.NewSessionID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": message,
+		"count":   result.RowsAffected,
+	})
+}
+
 // Helper functions
 
 func replaceNamePlaceholder(message, name string) string {

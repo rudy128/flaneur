@@ -493,8 +493,17 @@ const ApiManagement = () => {
                         {whatsappAccountsData?.accounts?.map((account) => (
                           <div
                             key={account.id}
-                            className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                            className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                              account.status === 'logged_out' 
+                                ? 'bg-red-50 border-red-200 hover:bg-red-100' 
+                                : 'bg-card hover:bg-accent/50'
+                            }`}
                           >
+                            {account.status === 'logged_out' && (
+                              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                                Logged Out
+                              </div>
+                            )}
                             <div 
                               className="flex items-center gap-3 flex-1 cursor-pointer"
                               onClick={() => setViewAccount({ 
@@ -507,14 +516,31 @@ const ApiManagement = () => {
                                 } 
                               })}
                             >
-                              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                                <MessageCircle className="h-5 w-5 text-green-600" />
+                              <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                                account.status === 'logged_out' 
+                                  ? 'bg-red-100' 
+                                  : 'bg-green-100'
+                              }`}>
+                                <MessageCircle className={`h-5 w-5 ${
+                                  account.status === 'logged_out' 
+                                    ? 'text-red-600' 
+                                    : 'text-green-600'
+                                }`} />
                               </div>
                               <div className="flex-1">
                                 <div className="font-medium">{account.phone_number}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {account.name || "WhatsApp Account"} • {account.status}
+                                <div className={`text-sm ${
+                                  account.status === 'logged_out' 
+                                    ? 'text-red-600 font-semibold' 
+                                    : 'text-muted-foreground'
+                                }`}>
+                                  {account.name || "WhatsApp Account"} • {account.status === 'logged_out' ? '⚠️ Session Expired' : account.status}
                                 </div>
+                                {account.status === 'logged_out' && (
+                                  <div className="text-xs text-red-600 mt-1">
+                                    Please delete this account and reconnect
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">

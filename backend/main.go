@@ -139,6 +139,7 @@ func main() {
 		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)                  // Get batch status
 		whatsapp.DELETE("/scheduled/:message_id", controllers.CancelScheduledMessage) // Cancel message
 		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)                  // Cancel batch
+		whatsapp.POST("/resume-paused", controllers.ResumePausedMessages)             // Resume paused messages
 		whatsapp.GET("/message-logs", controllers.GetMessageLogs)                     // Get message history
 		whatsapp.GET("/message-logs/stats", controllers.GetMessageLogStats)           // Get message stats
 	}

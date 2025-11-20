@@ -434,12 +434,38 @@ export const whatsappApi = {
     pending: number;
     sent: number;
     failed: number;
+    paused?: number;
   }> => {
     return fetchApi("/whatsapp/message-logs/stats", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${jwtToken}`,
       },
+    });
+  },
+
+  /**
+   * Resume paused messages and optionally change session
+   */
+  resumePausedMessages: async (
+    jwtToken: string,
+    data: {
+      old_session_id: string;
+      new_session_id?: string;
+      batch_id?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    count: number;
+  }> => {
+    return fetchApi("/whatsapp/resume-paused", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${jwtToken}`,
+      },
+      body: JSON.stringify(data),
     });
   },
 };
