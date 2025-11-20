@@ -41,6 +41,15 @@ import (
 func main() {
 	config.ConnectDB()
 
+	// Initialize K8s manager (optional - will work without K8s)
+	log.Println("🔧 Initializing Kubernetes manager...")
+	if err := controllers.InitK8sManager(); err != nil {
+		log.Printf("⚠️  K8s manager not available: %v", err)
+		log.Println("📝 Running in non-K8s mode (will use WHATSAPP_MICROSERVICE_URL)")
+	} else {
+		log.Println("✅ Kubernetes manager initialized successfully")
+	}
+
 	// Initialize message scheduler
 	log.Println("🚀 Initializing Message Scheduler...")
 	scheduler.InitScheduler()
@@ -65,7 +74,7 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"*"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Authorization"},
 		AllowCredentials: false, // Cannot use credentials with AllowAllOrigins
 	}))
@@ -73,6 +82,13 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Ripper API is running",
+		})
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "healthy",
+			"service": "social-api-backend",
 		})
 	})
 
@@ -104,18 +120,27 @@ func main() {
 
 	whatsapp := r.Group("/whatsapp")
 	{
+		// K8s-based WhatsApp account creation (new flow)
+		whatsapp.POST("/accounts/create", controllers.CreateWhatsAppAccount)               // New: Create account with K8s pod
+		whatsapp.GET("/accounts/:session_id/status", controllers.GetWhatsAppAccountStatus) // New: Get account/pod status
+		whatsapp.POST("/accounts/:session_id/qr", controllers.GenerateQRForSession)        // New: Generate QR for specific session
+		whatsapp.DELETE("/accounts/k8s/:id", controllers.DeleteWhatsAppAccountK8s)         // New: Delete account + K8s pod
+		whatsapp.GET("/pods", controllers.ListWhatsAppPods)                                // New: List all WhatsApp pods
+		whatsapp.GET("/pods/:session_id/logs", controllers.GetPodLogs)                     // New: Get pod logs
+
+		// Legacy endpoints (backward compatible)
 		whatsapp.POST("/generate-qr", controllers.GenerateWhatsAppQR)
 		whatsapp.GET("/session-status/:sessionId", controllers.CheckWhatsAppSession)
 		whatsapp.GET("/", controllers.GetWhatsAppAccounts)
-		whatsapp.DELETE("/account/:id", controllers.DeleteWhatsAppAccount)               // New: Delete WhatsApp account
+		whatsapp.DELETE("/account/:id", controllers.DeleteWhatsAppAccount) // Delete WhatsApp account
 		whatsapp.POST("/send-message", controllers.SendWhatsAppMessage)
-		whatsapp.POST("/send-bulk", controllers.SendBulkMessages)                     // New: Bulk send with scheduling
-		whatsapp.GET("/scheduled", controllers.GetScheduledMessages)                  // New: Get scheduled messages
-		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)                  // New: Get batch status
-		whatsapp.DELETE("/scheduled/:message_id", controllers.CancelScheduledMessage) // New: Cancel message
-		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)                  // New: Cancel batch
-		whatsapp.GET("/message-logs", controllers.GetMessageLogs)                     // New: Get message history
-		whatsapp.GET("/message-logs/stats", controllers.GetMessageLogStats)           // New: Get message stats
+		whatsapp.POST("/send-bulk", controllers.SendBulkMessages)                     // Bulk send with scheduling
+		whatsapp.GET("/scheduled", controllers.GetScheduledMessages)                  // Get scheduled messages
+		whatsapp.GET("/batch/:batch_id", controllers.GetBatchStatus)                  // Get batch status
+		whatsapp.DELETE("/scheduled/:message_id", controllers.CancelScheduledMessage) // Cancel message
+		whatsapp.DELETE("/batch/:batch_id", controllers.CancelBatch)                  // Cancel batch
+		whatsapp.GET("/message-logs", controllers.GetMessageLogs)                     // Get message history
+		whatsapp.GET("/message-logs/stats", controllers.GetMessageLogStats)           // Get message stats
 	}
 
 	logs := r.Group("/logs")

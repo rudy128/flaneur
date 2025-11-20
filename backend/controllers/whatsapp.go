@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 func getWhatsAppMicroserviceURL() string {
@@ -86,17 +88,88 @@ type WhatsAppAccount struct {
 	ConnectedAt time.Time `json:"connected_at"`
 }
 
-// GenerateWhatsAppQR initiates QR code generation for WhatsApp login
+// GenerateWhatsAppQR initiates QR code generation for WhatsApp login using K8s flow
 func GenerateWhatsAppQR(c *gin.Context) {
-	// Forward request to WhatsApp microservice
-	resp, err := http.Post(
-		whatsappMicroserviceURL+"/api/whatsapp/generate-qr",
-		"application/json",
-		nil,
-	)
+	// Get user ID from JWT token
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	userID, err := getUserIDFromToken(tokenString)
 	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Generate unique session ID for this WhatsApp account (use hyphen instead of underscore for K8s compatibility)
+	sessionID := fmt.Sprintf("wa-%s", uuid.New().String()[:8])
+
+	// Create WhatsApp account record in database
+	account := models.WhatsAppAccount{
+		UserID:    userID,
+		SessionID: sessionID,
+		Status:    "pending",
+	}
+
+	if err := config.DB.Create(&account).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create WhatsApp account",
+		})
+		return
+	}
+
+	// Check if K8s manager is available
+	if k8sManager == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error":   "WhatsApp service unavailable",
+			"error": "Kubernetes manager not available. Please ensure the service is running in a Kubernetes cluster.",
+		})
+		return
+	}
+
+	// Create K8s pod for this WhatsApp session
+	log.Printf("📦 Creating K8s pod for session: %s, user: %s", sessionID, userID)
+	pod, err := k8sManager.CreateWhatsAppPod(sessionID, userID)
+	if err != nil {
+		log.Printf("❌ Failed to create K8s pod: %v", err)
+		// Update account status to failed
+		config.DB.Model(&account).Update("status", "failed")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create WhatsApp service pod",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("✅ K8s pod created: %s", pod.Name)
+
+	// Wait for pod to be ready (with timeout)
+	log.Printf("⏳ Waiting for pod to be ready...")
+	err = k8sManager.WaitForPodReady(sessionID, 60*time.Second) // 60 second timeout
+	if err != nil {
+		log.Printf("❌ Pod failed to become ready: %v", err)
+		config.DB.Model(&account).Update("status", "failed")
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "WhatsApp service pod failed to start",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("✅ Pod is ready, generating QR code...")
+
+	// Get service URL for this session
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", sessionID, k8sManager.GetNamespace())
+
+	// Call the pod's generate-qr endpoint
+	qrURL := fmt.Sprintf("%s/api/whatsapp/generate-qr?session_id=%s", serviceURL, sessionID)
+	resp, err := http.Post(qrURL, "application/json", nil)
+	if err != nil {
+		log.Printf("❌ Failed to call QR generation: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate QR code",
 			"details": err.Error(),
 		})
 		return
@@ -106,30 +179,48 @@ func GenerateWhatsAppQR(c *gin.Context) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to read response from WhatsApp service",
+			"error": "Failed to read QR response",
 		})
 		return
 	}
 
-	// Forward the response
 	var qrResponse map[string]interface{}
 	if err := json.Unmarshal(body, &qrResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to parse WhatsApp service response",
+			"error": "Failed to parse QR response",
 		})
 		return
 	}
 
-	c.JSON(resp.StatusCode, qrResponse)
+	// Add session info to response
+	qrResponse["session_id"] = sessionID
+	qrResponse["account_id"] = account.ID
+	qrResponse["pod_name"] = pod.Name
+	qrResponse["service_name"] = fmt.Sprintf("whatsapp-svc-%s", sessionID)
+
+	log.Printf("✅ QR code generated successfully for session: %s", sessionID)
+	c.JSON(http.StatusOK, qrResponse)
 }
 
 // CheckWhatsAppSession checks the status of a WhatsApp login session
 func CheckWhatsAppSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 
-	// Forward request to WhatsApp microservice
+	// Get the WhatsApp account to find the service URL
+	var account models.WhatsAppAccount
+	if err := config.DB.Where("session_id = ?", sessionID).First(&account).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "WhatsApp session not found",
+		})
+		return
+	}
+
+	// Build service URL for this session's pod
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", sessionID, k8sManager.GetNamespace())
+
+	// Forward request to WhatsApp pod
 	resp, err := http.Get(
-		fmt.Sprintf("%s/api/whatsapp/session-status/%s", whatsappMicroserviceURL, sessionID),
+		fmt.Sprintf("%s/api/whatsapp/session-status/%s", serviceURL, sessionID),
 	)
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -259,6 +350,9 @@ func SendWhatsAppMessage(c *gin.Context) {
 	fmt.Printf("DEBUG SendMessage: Received request - SessionID: %s, Phone: %s, Message: %s\n",
 		req.SessionID, req.Phone, req.Message)
 
+	// Build service URL for this session's pod
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", req.SessionID, k8sManager.GetNamespace())
+
 	// Forward to WhatsApp microservice with session_id
 	jsonData, _ := json.Marshal(map[string]interface{}{
 		"session_id": req.SessionID,
@@ -267,12 +361,12 @@ func SendWhatsAppMessage(c *gin.Context) {
 		"reply":      req.Reply,
 	})
 
-	microserviceURL := whatsappMicroserviceURL + "/api/whatsapp/send-message"
-	fmt.Printf("DEBUG SendMessage: Forwarding to microservice: %s\n", microserviceURL)
+	sendMessageURL := serviceURL + "/api/whatsapp/send-message"
+	fmt.Printf("DEBUG SendMessage: Forwarding to microservice: %s\n", sendMessageURL)
 	fmt.Printf("DEBUG SendMessage: Payload: %s\n", string(jsonData))
 
 	resp, err := http.Post(
-		microserviceURL,
+		sendMessageURL,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)
@@ -313,7 +407,7 @@ func SendWhatsAppMessage(c *gin.Context) {
 // DeleteWhatsAppAccount deletes a WhatsApp account
 func DeleteWhatsAppAccount(c *gin.Context) {
 	accountID := c.Param("id")
-	
+
 	// Get user ID from JWT token
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
@@ -344,9 +438,12 @@ func DeleteWhatsAppAccount(c *gin.Context) {
 		return
 	}
 
+	// Build service URL for this session's pod
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", account.SessionID, k8sManager.GetNamespace())
+
 	// Optional: Try to disconnect session from WhatsApp microservice
 	// This is best effort - we don't fail if microservice is down
-	disconnectURL := fmt.Sprintf("%s/api/whatsapp/disconnect/%s", whatsappMicroserviceURL, account.SessionID)
+	disconnectURL := fmt.Sprintf("%s/api/whatsapp/disconnect/%s", serviceURL, account.SessionID)
 	req, _ := http.NewRequest("DELETE", disconnectURL, nil)
 	client := &http.Client{Timeout: 5 * time.Second}
 	client.Do(req) // Ignore errors - account is already deleted from DB

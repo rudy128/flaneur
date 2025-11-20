@@ -22,12 +22,14 @@ type TwitterAccount struct {
 
 type WhatsAppAccount struct {
 	ID          string    `json:"id" gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	PhoneNumber string    `json:"phone_number" gorm:"not null"`
+	PhoneNumber string    `json:"phone_number"`
 	Name        string    `json:"name"`
 	SessionID   string    `json:"session_id" gorm:"not null;unique"`
-	Status      string    `json:"status" gorm:"default:'active'"` // active, disconnected
+	Status      string    `json:"status" gorm:"default:'active'"` // active, disconnected, creating, initializing, ready, failed
 	UserID      string    `json:"user_id" gorm:"type:uuid;not null"`
 	User        User      `json:"user" gorm:"foreignKey:UserID"`
+	PodName     string    `json:"pod_name"`    // K8s pod name
+	ServiceURL  string    `json:"service_url"` // K8s service URL
 	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }

@@ -172,15 +172,7 @@ const ApiManagement = () => {
   const generateWhatsAppQR = async () => {
     if (!token) return;
     
-    // Client-side limit: Only allow one WhatsApp account per user
-    if (hasWhatsAppAccount) {
-      toast({
-        title: "Limit Reached",
-        description: "You can only connect one WhatsApp account. Please remove the existing one first.",
-        variant: "destructive",
-      });
-      return;
-    }
+  // Removed client-side WhatsApp account limit
     
     try {
       setIsConnecting(true);
@@ -858,22 +850,16 @@ const ApiManagement = () => {
                       <span>Twitter</span>
                     </div>
                   </SelectItem>
-                  <SelectItem value="whatsapp" disabled={hasWhatsAppAccount}>
+                  <SelectItem value="whatsapp">
                     <div className="flex items-center gap-2">
                       <MessageCircle className="h-4 w-4" />
                       <span>WhatsApp</span>
-                      {hasWhatsAppAccount && (
-                        <span className="text-xs text-muted-foreground ml-1">(Limit reached)</span>
-                      )}
+                      {/* Allow multiple WhatsApp accounts, no limit message */}
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
-              {hasWhatsAppAccount && (
-                <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
-                  You can only connect one WhatsApp account. Remove the existing one to connect a different account.
-                </p>
-              )}
+              {/* Removed WhatsApp account limit info message */}
             </div>
 
             {selectedPlatform === "twitter" && (

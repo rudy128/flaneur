@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: social-api
+data:
+  DATABASE_HOST: "postgres-service"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "social_api"
+  DATABASE_USER: "postgres"
+  WHATSAPP_SERVICE_URL: "http://whatsapp-service:8083"
+  FRONTEND_URL: "http://localhost:8081"
+  BACKEND_PORT: "8080"
+  GIN_MODE: "release"
+  K8S_NAMESPACE: "social-api"
+  K8S_WHATSAPP_IMAGE: "rudy128/whatsapp-service:latest"
+  K8S_SERVICE_ACCOUNT: "whatsapp-spawner"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  namespace: social-api
+type: Opaque
+stringData:
+  DATABASE_PASSWORD: "postgres123"
+  JWT_SECRET: "your-super-secret-jwt-key-change-this-in-production"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: whatsapp-config
+  namespace: social-api
+data:
+  WHATSAPP_PORT: "8083"
+  BACKEND_URL: "http://backend-service:8080"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: social-api
+data:
+  VITE_API_URL: "http://backend-service:8080"
+  VITE_WS_URL: "ws://backend-service:8080/ws"

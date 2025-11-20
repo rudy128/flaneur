@@ -99,7 +99,7 @@ func SendBulkMessages(c *gin.Context) {
 			SequenceNumber: i + 1,
 			DelaySeconds:   0,
 		}
-		
+
 		// Save log entry
 		if err := config.DB.Create(messageLog).Error; err != nil {
 			log.Printf("⚠️ Failed to create message log: %v", err)
@@ -116,7 +116,7 @@ func SendBulkMessages(c *gin.Context) {
 		if err != nil {
 			failCount++
 			result["error"] = err.Error()
-			
+
 			// Update log status to failed
 			if messageLog.ID != "" {
 				now := time.Now()
@@ -128,7 +128,7 @@ func SendBulkMessages(c *gin.Context) {
 			}
 		} else {
 			successCount++
-			
+
 			// Update log status to sent
 			if messageLog.ID != "" {
 				now := time.Now()
@@ -211,10 +211,12 @@ func sendWhatsAppMessageDirect(sessionID, phone, message string) error {
 		"reply":      false,
 	})
 
-	microserviceURL := whatsappMicroserviceURL + "/api/whatsapp/send-message"
+	// Build service URL for this session's pod
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", sessionID, k8sManager.GetNamespace())
+	sendMessageURL := serviceURL + "/api/whatsapp/send-message"
 
 	resp, err := http.Post(
-		microserviceURL,
+		sendMessageURL,
 		"application/json",
 		bytes.NewBuffer(jsonData),
 	)

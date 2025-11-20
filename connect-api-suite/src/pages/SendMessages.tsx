@@ -227,8 +227,10 @@ export default function SendMessages() {
       
       const parsedContacts: Contact[] = dataLines.map(line => {
         const [phone, name, individualMessage] = line.split(",").map(cell => cell.trim());
+        // Remove all non-numeric characters from phone number
+        const cleanPhone = phone.replace(/\D/g, '');
         return { 
-          phone, 
+          phone: cleanPhone, 
           name: name || undefined,
           message: individualMessage || undefined 
         };
@@ -272,8 +274,11 @@ export default function SendMessages() {
         
         const parsedContacts: Contact[] = dataRows.map(row => {
           const [phone, name, individualMessage] = row;
+          // Remove all non-numeric characters from phone number
+          const phoneStr = phone?.toString() || "";
+          const cleanPhone = phoneStr.replace(/\D/g, '');
           return { 
-            phone: phone?.toString() || "", 
+            phone: cleanPhone, 
             name: name?.toString() || undefined,
             message: individualMessage?.toString() || undefined
           };

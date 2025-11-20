@@ -147,9 +147,9 @@ func (s *MessageScheduler) sendToWhatsApp(msg *models.ScheduledMessage) error {
 
 	// Find existing message log entry (created during scheduling)
 	var messageLog models.MessageLog
-	result := s.db.Where("batch_id = ? AND sequence_number = ? AND status = ?", 
+	result := s.db.Where("batch_id = ? AND sequence_number = ? AND status = ?",
 		msg.BatchID, msg.SequenceNumber, "pending").First(&messageLog)
-	
+
 	if result.Error != nil {
 		// If no existing log found, create a new one (fallback for backward compatibility)
 		log.Printf("⚠️ No existing message log found, creating new one")
@@ -166,7 +166,7 @@ func (s *MessageScheduler) sendToWhatsApp(msg *models.ScheduledMessage) error {
 			SequenceNumber: msg.SequenceNumber,
 			DelaySeconds:   msg.ActualDelay,
 		}
-		
+
 		if err := s.db.Create(&messageLog).Error; err != nil {
 			log.Printf("⚠️ Failed to create message log: %v", err)
 		}
@@ -198,12 +198,19 @@ func (s *MessageScheduler) sendToWhatsApp(msg *models.ScheduledMessage) error {
 		return fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	// Send to WhatsApp microservice
-	baseURL := os.Getenv("WHATSAPP_MICROSERVICE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:8083"
+	// Build service URL for this session's pod
+	// Get K8s namespace from environment variable (defaults to social-api)
+	namespace := os.Getenv("K8S_NAMESPACE")
+	if namespace == "" {
+		namespace = "social-api"
 	}
-	microserviceURL := baseURL + "/api/whatsapp/send-message"
+
+	// Build K8s service URL dynamically based on session ID
+	// Format: http://whatsapp-svc-{sessionID}.{namespace}.svc.cluster.local:8083
+	serviceURL := fmt.Sprintf("http://whatsapp-svc-%s.%s.svc.cluster.local:8083", msg.SessionID, namespace)
+	microserviceURL := serviceURL + "/api/whatsapp/send-message"
+
+	log.Printf("🌐 Making request to: %s with payload: %s", microserviceURL, string(jsonData))
 
 	resp, err := http.Post(
 		microserviceURL,
@@ -225,6 +232,8 @@ func (s *MessageScheduler) sendToWhatsApp(msg *models.ScheduledMessage) error {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+
+	log.Printf("📡 WhatsApp service response: Status=%d, Body=%s", resp.StatusCode, string(body))
 
 	if resp.StatusCode != http.StatusOK {
 		// Update log status to failed
@@ -298,7 +307,7 @@ func (s *MessageScheduler) ScheduleMessage(msg *models.ScheduledMessage) error {
 		SequenceNumber: msg.SequenceNumber,
 		DelaySeconds:   msg.ActualDelay,
 	}
-	
+
 	// Save log entry to database
 	if err := s.db.Create(messageLog).Error; err != nil {
 		log.Printf("⚠️ Failed to create message log during scheduling: %v", err)

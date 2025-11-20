@@ -356,8 +356,11 @@ func generateQRHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new session
-	sessionID := fmt.Sprintf("wa_%d", time.Now().UnixNano())
+	// Get session_id from query parameter, or generate one if not provided
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("wa_%d", time.Now().UnixNano())
+	}
 
 	dbLog := waLog.Stdout("Database", "ERROR", true)
 	ctx := context.Background()

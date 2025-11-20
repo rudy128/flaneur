@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: whatsapp-spawner
+  namespace: social-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: whatsapp-pod-manager
+  namespace: social-api
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch", "create", "delete", "deletecollection"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: whatsapp-pod-manager-binding
+  namespace: social-api
+subjects:
+- kind: ServiceAccount
+  name: whatsapp-spawner
+  namespace: social-api
+roleRef:
+  kind: Role
+  name: whatsapp-pod-manager
+  apiGroup: rbac.authorization.k8s.io

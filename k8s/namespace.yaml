@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: social-api
+  labels:
+    name: social-api
+    environment: production
